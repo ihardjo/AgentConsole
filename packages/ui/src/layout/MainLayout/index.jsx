@@ -11,6 +11,7 @@ import Header from './Header'
 import Sidebar from './Sidebar'
 import { drawerWidth, headerHeight } from '@/store/constant'
 import { SET_MENU } from '@/store/actions'
+import { usePlatformConfig } from '@/hooks/usePlatformConfig'
 
 // styles
 const Main = styled('main', { shouldForwardProp: (prop) => prop !== 'open' })(({ theme, open }) => ({
@@ -59,6 +60,9 @@ const Main = styled('main', { shouldForwardProp: (prop) => prop !== 'open' })(({
 const MainLayout = () => {
     const theme = useTheme()
     const matchDownMd = useMediaQuery(theme.breakpoints.down('lg'))
+
+    // Load platform configuration (app name and favicon)
+    usePlatformConfig()
 
     // Handle left drawer
     const leftDrawerOpened = useSelector((state) => state.customization.opened)

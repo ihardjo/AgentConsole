@@ -11,6 +11,7 @@ import { useTheme, styled, darken } from '@mui/material/styles'
 import LogoSection from '../LogoSection'
 import ProfileSection from './ProfileSection'
 import WorkspaceSwitcher from '@/layout/MainLayout/Header/WorkspaceSwitcher'
+import OpenSourceOrgWorkspaceBreadcrumbs from '@/layout/MainLayout/Header/OpenSourceOrgWorkspaceBreadcrumbs'
 import OrgWorkspaceBreadcrumbs from '@/layout/MainLayout/Header/OrgWorkspaceBreadcrumbs'
 import PricingDialog from '@/ui-component/subscription/PricingDialog'
 
@@ -25,7 +26,7 @@ import { enqueueSnackbar as enqueueSnackbarAction, closeSnackbar as closeSnackba
 import { logoutSuccess } from '@/store/reducers/authSlice'
 
 // API
-import accountApi from '@/api/account.api'
+import accountApi from '@/api/accountManagement'
 
 // Hooks
 import useApi from '@/hooks/useApi'
@@ -263,11 +264,14 @@ const Header = ({ handleLeftDrawerToggle }) => {
                         }
                     }}
                 >
-                    <GitHubStarButton starCount={starCount} isDark={isDark} />
+                    {
+                        //<GitHubStarButton starCount={starCount} isDark={isDark} />
+                    }
                 </Box>
             ) : (
                 <Box sx={{ flexGrow: 1 }} />
             )}
+            {isOpenSource && isAuthenticated && <OpenSourceOrgWorkspaceBreadcrumbs />}
             {isEnterpriseLicensed && isAuthenticated && <WorkspaceSwitcher />}
             {isCloud && isAuthenticated && <OrgWorkspaceBreadcrumbs />}
             {isCloud && currentUser?.isOrganizationAdmin && (

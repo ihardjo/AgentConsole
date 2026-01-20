@@ -178,10 +178,10 @@ const Agentflows = () => {
                         onSearchChange={onSearchChange}
                         search={true}
                         searchPlaceholder='Search Name or Category'
-                        title='Agentflows'
+                        title='AI Agents Flows'
                         description='Multi-agent systems, workflow orchestration'
                     >
-                        <ToggleButtonGroup
+                        {/* <ToggleButtonGroup
                             sx={{ borderRadius: 2, maxHeight: 40 }}
                             value={agentflowVersion}
                             color='primary'
@@ -213,7 +213,7 @@ const Agentflows = () => {
                             >
                                 V1
                             </ToggleButton>
-                        </ToggleButtonGroup>
+                        </ToggleButtonGroup> */}
                         <ToggleButtonGroup
                             sx={{ borderRadius: 2, maxHeight: 40 }}
                             value={view}

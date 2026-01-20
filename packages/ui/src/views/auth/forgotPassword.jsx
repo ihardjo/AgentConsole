@@ -11,7 +11,7 @@ import { Input } from '@/ui-component/input/Input'
 import { BackdropLoader } from '@/ui-component/loading/BackdropLoader'
 
 // API
-import accountApi from '@/api/account.api'
+import accountApi from '@/api/accountManagement'
 
 // Hooks
 import useApi from '@/hooks/useApi'

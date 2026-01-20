@@ -13,6 +13,7 @@ import config from '@/config'
 
 // assets
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord'
+import { IconExternalLink } from '@tabler/icons-react'
 
 // ==============================|| SIDEBAR MENU LIST ITEMS ||============================== //
 
@@ -151,6 +152,11 @@ const NavItem = ({ item, level, navType, onClick, onUploadFile }) => {
                     }}
                     label={'BETA'}
                 />
+            )}
+            {item.external && (
+                <ListItemIcon sx={{ my: 'auto', minWidth: 'auto', ml: 1 }}>
+                    <IconExternalLink stroke={1.5} size='1rem' style={{ opacity: 0.8 }} />
+                </ListItemIcon>
             )}
         </ListItemButton>
     )

@@ -23,7 +23,13 @@ import {
     IconLockCheck,
     IconFileDatabase,
     IconShieldLock,
-    IconListCheck
+    IconListCheck,
+    IconMicrophone,
+    IconChartDots3,
+    IconShieldCheck,
+    IconInfinity,
+    IconCloudCog,
+    IconExternalLink
 } from '@tabler/icons-react'
 
 // constant
@@ -51,7 +57,13 @@ const icons = {
     IconLockCheck,
     IconFileDatabase,
     IconShieldLock,
-    IconListCheck
+    IconListCheck,
+    IconMicrophone,
+    IconChartDots3,
+    IconShieldCheck,
+    IconInfinity,
+    IconCloudCog,
+    IconExternalLink
 }
 
 // ==============================|| DASHBOARD MENU ITEMS ||============================== //
@@ -66,18 +78,18 @@ const dashboard = {
             title: '',
             type: 'group',
             children: [
-                {
-                    id: 'chatflows',
-                    title: 'Chatflows',
-                    type: 'item',
-                    url: '/chatflows',
-                    icon: icons.IconHierarchy,
-                    breadcrumbs: true,
-                    permission: 'chatflows:view'
-                },
+                // {
+                //     id: 'chatflows',
+                //     title: 'Chatflows',
+                //     type: 'item',
+                //     url: '/chatflows',
+                //     icon: icons.IconHierarchy,
+                //     breadcrumbs: true,
+                //     permission: 'chatflows:view'
+                // },
                 {
                     id: 'agentflows',
-                    title: 'Agentflows',
+                    title: 'AI Agents',
                     type: 'item',
                     url: '/agentflows',
                     icon: icons.IconUsersGroup,
@@ -158,6 +170,141 @@ const dashboard = {
                 }
             ]
         },
+
+        //// Start - Accenture Custom Menu
+        // {
+        //     id: 'advanced-agents',
+        //     title: 'Advanced Agents',
+        //     type: 'group',
+        //     children: [
+        //         {
+        //             id: 'graphagents',
+        //             title: 'Graph Agents',
+        //             type: 'item',
+        //             url: 'https://graphagent.accentureid.ai/',
+        //             icon: icons.IconChartDots3,
+        //             breadcrumbs: true,
+        //             external: true,
+        //             target: true,
+        //             alwaysShow: true
+        //         },
+        //         {
+        //             id: 'voiceagent',
+        //             title: 'Voice Agent',
+        //             type: 'item',
+        //             url: 'https://voiceagent.accentureid.ai/',
+        //             icon: icons.IconMicrophone,
+        //             breadcrumbs: true,
+        //             external: true,
+        //             target: true,
+        //             alwaysShow: true
+        //         }
+        //     ]
+        // },
+        {
+            id: 'deployment-management',
+            title: 'Deployment Management',
+            type: 'group',
+            children: [
+                {
+                    id: 'agentEvaluation',
+                    title: 'Agent Evaluation',
+                    type: 'item',
+                    url: 'https://langfuse.accentureid.ai/',
+                    icon: icons.IconShieldCheck,
+                    breadcrumbs: true,
+                    external: true,
+                    target: true,
+                    alwaysShow: true
+                },
+                {
+                    id: 'agentOps',
+                    title: 'Agent Ops',
+                    type: 'item',
+                    url: '/agentops',
+                    icon: icons.IconInfinity,
+                    breadcrumbs: true,
+                    permission: 'agentops:view'
+                },
+                {
+                    id: 'workerConfiguration',
+                    title: 'Worker Configuration',
+                    type: 'item',
+                    url: '/worker-configuration',
+                    icon: icons.IconCloudCog,
+                    breadcrumbs: true,
+                    permission: 'worker:view'
+                }
+            ]
+        },
+        {
+            id: 'platform-management',
+            title: 'Platform Management',
+            type: 'group',
+            children: [
+                {
+                    id: 'role-management',
+                    title: 'Roles',
+                    type: 'item',
+                    url: '/role-management',
+                    icon: icons.IconLockCheck,
+                    breadcrumbs: true,
+                    // display: 'feat:roles',
+                    permission: 'roles:manage'
+                },
+                {
+                    id: 'user-management',
+                    title: 'Users',
+                    type: 'item',
+                    url: '/user-management',
+                    icon: icons.IconUsers,
+                    breadcrumbs: true,
+                    // display: 'feat:users',
+                    permission: 'users:manage'
+                },
+                {
+                    id: 'workspace-management',
+                    title: 'Workspaces',
+                    type: 'item',
+                    url: '/workspace-management',
+                    icon: icons.IconStack2,
+                    breadcrumbs: true,
+                    // display: 'feat:workspaces',
+                    permission: 'workspace:view'
+                },
+                {
+                    id: 'platform-configuration',
+                    title: 'Platform Configuration',
+                    type: 'item',
+                    url: '/platform-configuration',
+                    icon: icons.IconSettings,
+                    breadcrumbs: true,
+                    permission: 'platformConfiguration:manage'
+                },
+                // {
+                //     id: 'user-activity',
+                //     title: 'User Activity',
+                //     type: 'item',
+                //     url: '/user-activity',
+                //     icon: icons.IconClipboardList,
+                //     breadcrumbs: true,
+                //     // display: 'feat:login-activity',
+                //     permission: 'loginActivity:view'
+                // },
+                // {
+                //     id: 'sso-configuration',
+                //     title: 'SSO Configuration',
+                //     type: 'item',
+                //     url: '/sso-configuration',
+                //     icon: icons.IconShieldLock,
+                //     breadcrumbs: true,
+                //     // display: 'feat:sso-config',
+                //     permission: 'sso:manage'
+                // }
+            ]
+        },
+        //// End - Accenture Custom Menu
+
         {
             id: 'evaluations',
             title: 'Evaluations',

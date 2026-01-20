@@ -1,11 +1,11 @@
 import { styled } from '@mui/system'
 import { TabsList as BaseTabsList } from '@mui/base/TabsList'
-import { blue } from './tabColors'
+import { purple } from './tabColors'
 
 export const TabsList = styled(BaseTabsList)(
     ({ theme, ...props }) => `
     min-width: 400px;
-    background-color: ${props.sx?.backgroundColor || blue[500]};
+    background-color: ${props.sx?.backgroundColor || purple[500]};
     border-radius: 20px;
     margin-top: 16px;
     margin-bottom: 16px;

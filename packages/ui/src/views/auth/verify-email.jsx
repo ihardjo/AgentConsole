@@ -8,7 +8,7 @@ import { Stack, Typography, Box, useTheme, CircularProgress } from '@mui/materia
 import MainCard from '@/ui-component/cards/MainCard'
 
 // API
-import accountApi from '@/api/account.api'
+import accountApi from '@/api/accountManagement'
 
 // Hooks
 import useApi from '@/hooks/useApi'

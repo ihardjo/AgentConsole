@@ -1,6 +1,6 @@
 import express from 'express'
 import logController from '../../controllers/log'
-import { checkAnyPermission } from '../../enterprise/rbac/PermissionCheck'
+import { checkAnyPermission } from '../../custom-rbac/middleware'
 const router = express.Router()
 
 // READ

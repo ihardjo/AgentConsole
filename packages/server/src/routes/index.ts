@@ -3,7 +3,7 @@ import apikeyRouter from './apikey'
 import assistantsRouter from './assistants'
 import attachmentsRouter from './attachments'
 import chatMessageRouter from './chat-messages'
-import chatflowsRouter from './chatflows'
+import agentflowsRouter from './chatflows'
 import chatflowsStreamingRouter from './chatflows-streaming'
 import chatflowsUploadsRouter from './chatflows-uploads'
 import componentsCredentialsRouter from './components-credentials'
@@ -68,13 +68,25 @@ import accountRouter from '../enterprise/routes/account.route'
 import loginMethodRouter from '../enterprise/routes/login-method.route'
 import { IdentityManager } from '../IdentityManager'
 
+// Custom RBAC routes
+import {
+    roleManagementRouter,
+    userManagementRouter,
+    workspaceManagementRouter,
+    workspaceUserManagementRouter,
+    accountManagementRouter,
+    organizationManagementRouter,
+    organizationUserManagementRouter,
+    platformConfigRouter
+} from '../custom-rbac/routes'
+
 const router = express.Router()
 
 router.use('/ping', pingRouter)
 router.use('/apikey', apikeyRouter)
 router.use('/assistants', assistantsRouter)
 router.use('/attachments', attachmentsRouter)
-router.use('/chatflows', chatflowsRouter)
+router.use('/chatflows', agentflowsRouter)
 router.use('/chatflows-streaming', chatflowsStreamingRouter)
 router.use('/chatmessage', chatMessageRouter)
 router.use('/chatflows-uploads', chatflowsUploadsRouter)
@@ -137,5 +149,15 @@ router.use('/account', accountRouter)
 router.use('/loginmethod', loginMethodRouter)
 router.use('/logs', IdentityManager.checkFeatureByPlan('feat:logs'), logsRouter)
 router.use('/files', IdentityManager.checkFeatureByPlan('feat:files'), filesRouter)
+
+// Custom RBAC routes
+router.use('/role-management', roleManagementRouter)
+router.use('/user-management', userManagementRouter)
+router.use('/workspace-management', workspaceManagementRouter)
+router.use('/workspace-user-management', workspaceUserManagementRouter)
+router.use('/account-management', accountManagementRouter)
+router.use('/organization-management', organizationManagementRouter)
+router.use('/organization-user-management', organizationUserManagementRouter)
+router.use('/platform-configuration', platformConfigRouter)
 
 export default router

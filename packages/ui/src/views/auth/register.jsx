@@ -11,7 +11,7 @@ import { Input } from '@/ui-component/input/Input'
 import { BackdropLoader } from '@/ui-component/loading/BackdropLoader'
 
 // API
-import accountApi from '@/api/account.api'
+import accountApi from '@/api/accountManagement'
 import loginMethodApi from '@/api/loginmethod'
 import ssoApi from '@/api/sso'
 
@@ -173,6 +173,28 @@ const RegisterPage = () => {
                 const errorMessages = result.error.errors.map((err) => err.message)
                 setAuthError(errorMessages.join(', '))
             }
+        } else if (isOpenSource) {
+            // Open Source without token - initial owner registration
+            const result = RegisterCloudUserSchema.safeParse({
+                username,
+                email,
+                password,
+                confirmPassword
+            })
+            if (result.success) {
+                setLoading(true)
+                const body = {
+                    user: {
+                        name: username,
+                        email,
+                        credential: password
+                    }
+                }
+                await registerApi.request(body)
+            } else {
+                const errorMessages = result.error.errors.map((err) => err.message)
+                setAuthError(errorMessages.join(', '))
+            }
         }
     }
 
@@ -189,6 +211,10 @@ const RegisterPage = () => {
                 )
             } else if (isCloud) {
                 setAuthError(`Error in registering user. Please try again.`)
+            } else if (isOpenSource) {
+                setAuthError(
+                    `Error in registering user. Please contact your administrator. (${registerApi.error?.response?.data?.message})`
+                )
             }
             setLoading(false)
         }
@@ -336,7 +362,7 @@ const RegisterPage = () => {
                                     <i>Kindly use a valid email address. Will be used as login id.</i>
                                 </Typography>
                             </Box>
-                            {isEnterpriseLicensed && (
+                            {(isEnterpriseLicensed || (isOpenSource && token)) && (
                                 <Box>
                                     <div style={{ display: 'flex', flexDirection: 'row' }}>
                                         <Typography>

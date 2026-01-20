@@ -2,14 +2,14 @@ import { useSelector } from 'react-redux'
 import { useConfig } from '@/store/context/ConfigContext'
 
 export const useAuth = () => {
-    const { isOpenSource } = useConfig()
     const permissions = useSelector((state) => state.auth.permissions)
     const features = useSelector((state) => state.auth.features)
     const isGlobal = useSelector((state) => state.auth.isGlobal)
     const currentUser = useSelector((state) => state.auth.user)
 
     const hasPermission = (permissionId) => {
-        if (isOpenSource || isGlobal) {
+        // Global admin users have all permissions
+        if (isGlobal) {
             return true
         }
         if (!permissionId) return false
@@ -21,7 +21,8 @@ export const useAuth = () => {
     }
 
     const hasAssignedWorkspace = (workspaceId) => {
-        if (isOpenSource || isGlobal) {
+        // Global admin users have access to all workspaces
+        if (isGlobal) {
             return true
         }
         const activeWorkspaceId = currentUser?.activeWorkspaceId || ''
