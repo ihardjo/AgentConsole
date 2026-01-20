@@ -38,9 +38,8 @@ import { ExpressAdapter } from '@bull-board/express'
 
 declare global {
     namespace Express {
-        interface User extends LoggedInUser {}
-        interface Request {
-            user?: LoggedInUser
+        interface User extends LoggedInUser {
+            isApiKeyValidated?: boolean
         }
         namespace Multer {
             interface File {
