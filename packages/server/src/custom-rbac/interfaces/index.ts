@@ -161,17 +161,31 @@ export interface ILoggedInUser {
     email: string
     name: string
     status: CustomUserStatus
-    activeOrganizationId?: string
-    activeOrganization?: string
-    activeWorkspaceId?: string
-    activeWorkspace?: string
     roleId?: string
     roleName?: string
-    permissions?: string[]
-    features?: string[]
+    activeOrganizationId?: string
+    activeOrganization?: string
+    activeOrganizationSubscriptionId?: string
+    activeOrganizationCustomerId?: string
+    activeOrganizationProductId?: string
     isOrganizationAdmin?: boolean
+    activeWorkspaceId?: string
+    activeWorkspace?: string
+    assignedWorkspaces?: IAssignedWorkspace[]
     isApiKeyValidated?: boolean
+    permissions?: string[]
+    features?: Record<string, string>
+    ssoRefreshToken?: string
+    ssoToken?: string
+    ssoProvider?: string
     loginMode?: string
+}
+
+export interface IAssignedWorkspace {
+    id: string
+    name: string
+    role: string
+    organizationId: string
 }
 
 // ========================================
@@ -252,8 +266,17 @@ export interface ICustomLoginActivity {
 // ========================================
 
 export enum CustomErrorMessage {
+    INVALID_MISSING_TOKEN = 'Invalid or Missing token',
+    TOKEN_EXPIRED = 'Token Expired',
+    REFRESH_TOKEN_EXPIRED = 'Refresh Token Expired',
+    FORBIDDEN = 'Forbidden',
     UNAUTHORIZED = 'Unauthorized access',
-    FORBIDDEN = 'You do not have permission to perform this action',
+    UNKNOWN_USER = 'Unknown Username or Password',
+    INCORRECT_PASSWORD = 'Incorrect Password',
+    INACTIVE_USER = 'Inactive User',
+    INVITED_USER = 'User Invited, but has not registered',
+    INVALID_WORKSPACE = 'No Workspace Assigned',
+    UNKNOWN_ERROR = 'Unknown Error',
     INVALID_TOKEN = 'Invalid or expired token',
     USER_NOT_FOUND = 'User not found',
     ORGANIZATION_NOT_FOUND = 'Organization not found',
@@ -264,3 +287,4 @@ export enum CustomErrorMessage {
     INVALID_INPUT = 'Invalid input provided',
     INTERNAL_ERROR = 'An internal error occurred'
 }
+

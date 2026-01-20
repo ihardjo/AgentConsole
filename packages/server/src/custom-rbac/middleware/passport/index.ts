@@ -30,10 +30,10 @@ import { InternalFlowiseError } from '../../../errors/internalFlowiseError'
 import { IdentityManager } from '../../../IdentityManager'
 import { Platform } from '../../../Interface'
 import { getRunningExpressApp } from '../../../utils/getRunningExpressApp'
-import { ErrorMessage, IAssignedWorkspace, LoggedInUser } from '../../../enterprise/Interface.Enterprise'
 import { v4 as uuidv4 } from 'uuid'
 
 // Import custom-rbac entities and services
+import { ILoggedInUser, IAssignedWorkspace, CustomErrorMessage } from '../../interfaces'
 import { OrganizationUserStatus } from '../../entities/organization-user.entity'
 import { GeneralRole } from '../../entities/role.entity'
 import { WorkspaceUser, WorkspaceUserStatus } from '../../entities/workspace-user.entity'
@@ -187,10 +187,11 @@ export const initializeJwtCookieMiddleware = async (app: express.Application, id
                     const features = await identityManager.getFeaturesByPlan(subscriptionId)
                     const productId = await identityManager.getProductIdFromSubscription(subscriptionId)
 
-                    const loggedInUser: LoggedInUser = {
+                    const loggedInUser: ILoggedInUser = {
                         id: workspaceUser.userId,
                         email: response.user.email,
                         name: response.user?.name,
+                        status: response.user.status as any,
                         roleId: workspaceUser.roleId,
                         activeOrganizationId: organization.id,
                         activeOrganizationSubscriptionId: subscriptionId,
@@ -257,25 +258,25 @@ export const initializeJwtCookieMiddleware = async (app: express.Application, id
         if (!refreshToken) return res.sendStatus(401)
 
         jwt.verify(refreshToken, jwtRefreshSecret, async (err: any, payload: any) => {
-            if (err || !payload) return res.status(401).json({ message: ErrorMessage.REFRESH_TOKEN_EXPIRED })
+            if (err || !payload) return res.status(401).json({ message: CustomErrorMessage.REFRESH_TOKEN_EXPIRED })
             // @ts-ignore
-            const loggedInUser = req.user as LoggedInUser
+            const loggedInUser = req.user as ILoggedInUser
             let isSSO = false
             let newTokenResponse: any = {}
             if (loggedInUser && loggedInUser.ssoRefreshToken) {
                 try {
                     newTokenResponse = await identityManager.getRefreshToken(loggedInUser.ssoProvider, loggedInUser.ssoRefreshToken)
                     if (newTokenResponse.error) {
-                        return res.status(401).json({ message: ErrorMessage.REFRESH_TOKEN_EXPIRED })
+                        return res.status(401).json({ message: CustomErrorMessage.REFRESH_TOKEN_EXPIRED })
                     }
                     isSSO = true
                 } catch (error) {
-                    return res.status(401).json({ message: ErrorMessage.REFRESH_TOKEN_EXPIRED })
+                    return res.status(401).json({ message: CustomErrorMessage.REFRESH_TOKEN_EXPIRED })
                 }
             }
             const meta = decryptToken(payload.meta)
             if (!meta) {
-                return res.status(401).json({ message: ErrorMessage.REFRESH_TOKEN_EXPIRED })
+                return res.status(401).json({ message: CustomErrorMessage.REFRESH_TOKEN_EXPIRED })
             }
             if (isSSO) {
                 loggedInUser.ssoToken = newTokenResponse.access_token
@@ -290,7 +291,7 @@ export const initializeJwtCookieMiddleware = async (app: express.Application, id
     })
 
     app.post('/api/v1/auth/login', (req, res, next?) => {
-        passport.authenticate('login', async (err: any, user: LoggedInUser) => {
+        passport.authenticate('login', async (err: any, user: ILoggedInUser) => {
             try {
                 if (err || !user) {
                     return next ? next(err) : res.status(401).json(err)
@@ -304,7 +305,7 @@ export const initializeJwtCookieMiddleware = async (app: express.Application, id
                         return next ? next(regenerateErr) : res.status(500).json({ message: 'Session regeneration failed' })
                     }
 
-                    req.login(user, { session: true }, async (error) => {
+                    req.login(user as any, { session: true }, async (error) => {
                         if (error) {
                             return next ? next(error) : res.status(401).json(error)
                         }
@@ -413,7 +414,7 @@ export const generateJwtRefreshToken = (user: any) => {
     return _generateJwtToken(user, expiryInMinutes, jwtRefreshSecret)
 }
 
-const _generateJwtToken = (user: Partial<LoggedInUser>, expiryInMinutes: number, secret: string) => {
+const _generateJwtToken = (user: Partial<ILoggedInUser>, expiryInMinutes: number, secret: string) => {
     const encryptedUserInfo = encryptToken(user?.id + ':' + user?.activeWorkspaceId)
     return sign({ id: user?.id, username: user?.name, meta: encryptedUserInfo }, secret!, {
         expiresIn: expiryInMinutes + 'm',
@@ -425,7 +426,7 @@ const _generateJwtToken = (user: Partial<LoggedInUser>, expiryInMinutes: number,
 }
 
 export const verifyToken = (req: Request, res: Response, next: NextFunction) => {
-    passport.authenticate('jwt', { session: true }, (err: any, user: LoggedInUser, info: object) => {
+    passport.authenticate('jwt', { session: true }, (err: any, user: ILoggedInUser, info: object) => {
         if (err) {
             return next(err)
         }
@@ -433,13 +434,13 @@ export const verifyToken = (req: Request, res: Response, next: NextFunction) => 
         // @ts-ignore
         if (info && info.name === 'TokenExpiredError') {
             if (req.cookies && req.cookies.refreshToken) {
-                return res.status(401).json({ message: ErrorMessage.TOKEN_EXPIRED, retry: true })
+                return res.status(401).json({ message: CustomErrorMessage.TOKEN_EXPIRED, retry: true })
             }
-            return res.status(401).json({ message: ErrorMessage.INVALID_MISSING_TOKEN })
+            return res.status(401).json({ message: CustomErrorMessage.INVALID_MISSING_TOKEN })
         }
 
         if (!user) {
-            return res.status(401).json({ message: ErrorMessage.INVALID_MISSING_TOKEN })
+            return res.status(401).json({ message: CustomErrorMessage.INVALID_MISSING_TOKEN })
         }
 
         const identityManager = getRunningExpressApp().identityManager
@@ -447,7 +448,35 @@ export const verifyToken = (req: Request, res: Response, next: NextFunction) => 
             return res.status(401).json({ redirectUrl: '/license-expired' })
         }
 
-        req.user = user
+        req.user = user as any
+        next()
+    })(req, res, next)
+}
+
+export const verifyTokenForBullMQDashboard = (req: Request, res: Response, next: NextFunction) => {
+    passport.authenticate('jwt', { session: true }, (err: any, user: ILoggedInUser, info: object) => {
+        if (err) {
+            return next(err)
+        }
+
+        // @ts-ignore
+        if (info && info.name === 'TokenExpiredError') {
+            if (req.cookies && req.cookies.refreshToken) {
+                return res.redirect('/signin?retry=true')
+            }
+            return res.redirect('/signin')
+        }
+
+        if (!user) {
+            return res.redirect('/signin')
+        }
+
+        const identityManager = getRunningExpressApp().identityManager
+        if (identityManager.isEnterprise() && !identityManager.isLicenseValid()) {
+            return res.redirect('/license-expired')
+        }
+
+        req.user = user as any
         next()
     })(req, res, next)
 }

@@ -5,7 +5,7 @@
  * This is a utility file copied from enterprise for custom-rbac passport implementation.
  */
 
-import { LoggedInUser } from '../../../enterprise/Interface.Enterprise'
+import { ILoggedInUser } from '../../interfaces'
 import * as crypto from 'crypto'
 import moment from 'moment'
 import { customAlphabet } from 'nanoid'
@@ -13,7 +13,7 @@ import { customAlphabet } from 'nanoid'
 const nanoid = customAlphabet('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz', 64)
 
 // Generate a copy of the users without their passwords.
-export const generateSafeCopy = (user: Partial<LoggedInUser>, deleteEmail?: boolean): any => {
+export const generateSafeCopy = (user: Partial<ILoggedInUser>, deleteEmail?: boolean): any => {
     let _user: any = { ...user }
     delete _user.credential
     delete _user.tempToken
