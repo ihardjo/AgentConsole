@@ -70,6 +70,17 @@ const WorkspaceDetails = Loadable(lazy(() => import('@/views/workspace/Workspace
 const SSOConfig = Loadable(lazy(() => import('@/views/auth/ssoConfig')))
 const SSOSuccess = Loadable(lazy(() => import('@/views/auth/ssoSuccess')))
 
+// custom RBAC features
+const RoleManagement = Loadable(lazy(() => import('@/views/rolemanagement')))
+const UserManagement = Loadable(lazy(() => import('@/views/usermanagement')))
+const WorkspaceManagement = Loadable(lazy(() => import('@/views/workspacemanagement')))
+const WorkspaceUserManagement = Loadable(lazy(() => import('@/views/workspacemanagement/WorkspaceUserManagement')))
+const PlatformConfiguration = Loadable(lazy(() => import('@/views/platformconfiguration')))
+
+// deployment management
+const AgentOps = Loadable(lazy(() => import('@/views/agentops')))
+const WorkerConfiguration = Loadable(lazy(() => import('@/views/workerconfiguration')))
+
 // ==============================|| MAIN ROUTING ||============================== //
 
 const MainRoutes = {
@@ -343,6 +354,64 @@ const MainRoutes = {
         {
             path: '/sso-success',
             element: <SSOSuccess />
+        },
+        // Custom RBAC Routes
+        {
+            path: '/role-management',
+            element: (
+                <RequireAuth permission={'roles:manage'}>
+                    <RoleManagement />
+                </RequireAuth>
+            )
+        },
+        {
+            path: '/user-management',
+            element: (
+                <RequireAuth permission={'users:manage'}>
+                    <UserManagement />
+                </RequireAuth>
+            )
+        },
+        {
+            path: '/workspace-management',
+            element: (
+                <RequireAuth permission={'workspace:view'}>
+                    <WorkspaceManagement />
+                </RequireAuth>
+            )
+        },
+        {
+            path: '/workspace-user-management/:id',
+            element: (
+                <RequireAuth permission={'workspace:view'}>
+                    <WorkspaceUserManagement />
+                </RequireAuth>
+            )
+        },
+        {
+            path: '/platform-configuration',
+            element: (
+                <RequireAuth permission={'platformConfiguration:manage'}>
+                    <PlatformConfiguration />
+                </RequireAuth>
+            )
+        },
+        // Deployment Management Routes
+        {
+            path: '/agentops',
+            element: (
+                <RequireAuth permission={'agentops:view'}>
+                    <AgentOps />
+                </RequireAuth>
+            )
+        },
+        {
+            path: '/worker-configuration',
+            element: (
+                <RequireAuth permission={'worker:view'}>
+                    <WorkerConfiguration />
+                </RequireAuth>
+            )
         }
     ]
 }
