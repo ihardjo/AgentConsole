@@ -1,6 +1,27 @@
 version: '3.1'
 
 services:
+    postgres:
+        image: postgres:18.1-alpine3.21
+        container_name: flowise-postgres
+        restart: always
+        environment:
+            - POSTGRES_DB=${DATABASE_NAME:-flowise}
+            - POSTGRES_USER=${DATABASE_USER:-admin}
+            - POSTGRES_PASSWORD=${DATABASE_PASSWORD}
+        ports:
+            - '${DATABASE_PORT:-5432}:5432'
+        volumes:
+            - postgres_data:/var/lib/postgresql/data
+        networks:
+            - flowise-net
+        healthcheck:
+            test: ['CMD-SHELL', 'pg_isready -U ${DATABASE_USER:-admin} -d ${DATABASE_NAME:-flowise}']
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 10s
+
     redis:
         image: redis:alpine
         container_name: flowise-redis
@@ -13,14 +34,17 @@ services:
 
     flowise:
         container_name: flowise-main
+        image: agentconsole:3.0.8-staging-source
         build:
-            context: .. # Build using the Dockerfile in the root directory
-            dockerfile: docker/Dockerfile
+            context: ..
+            dockerfile: Dockerfile
         ports:
             - '${PORT}:${PORT}'
         volumes:
             # Mount local .flowise to container's default location
             - ../.flowise:/root/.flowise
+        env_file:
+            - .env
         environment:
             # --- Essential Flowise Vars ---
             - PORT=${PORT:-3000}
@@ -32,19 +56,26 @@ services:
             - MODE=queue
             - QUEUE_NAME=flowise-queue # Ensure this matches worker
             - REDIS_URL=redis://redis:6379 # Use service name 'redis'
+            - DATABASE_HOST=${DATABASE_HOST:-postgres}
         depends_on:
-            - redis
+            postgres:
+                condition: service_healthy
+            redis:
+                condition: service_started
         networks:
             - flowise-net
 
     flowise-worker:
         container_name: flowise-worker
+        image: agentconsole-worker:3.0.8-staging-source
         build:
-            context: .. # Build context is still the root
-            dockerfile: docker/worker/Dockerfile # Ensure this path is correct
+            context: ..
+            dockerfile: docker/worker/Dockerfile
         volumes:
             # Mount same local .flowise to worker
             - ../.flowise:/root/.flowise
+        env_file:
+            - .env
         environment:
             # --- Essential Flowise Vars ---
             - WORKER_PORT=${WORKER_PORT:-5566} # Port for worker healthcheck
@@ -56,14 +87,21 @@ services:
             - MODE=queue
             - QUEUE_NAME=flowise-queue # Ensure this matches worker
             - REDIS_URL=redis://redis:6379 # Use service name 'redis'
+            - DATABASE_HOST=${DATABASE_HOST:-postgres}
         depends_on:
-            - redis
-            - flowise
+            postgres:
+                condition: service_healthy
+            redis:
+                condition: service_started
+            flowise:
+                condition: service_started
         networks:
             - flowise-net
 
 volumes:
     redis_data:
+        driver: local
+    postgres_data:
         driver: local
 
 networks:
