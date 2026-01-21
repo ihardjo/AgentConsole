@@ -18,7 +18,7 @@ import { useError } from '@/store/context/ErrorContext'
 
 // API
 import authApi from '@/api/auth'
-import accountApi from '@/api/account.api'
+import accountApi from '@/api/accountManagement'
 import loginMethodApi from '@/api/loginmethod'
 import ssoApi from '@/api/sso'
 
@@ -47,7 +47,7 @@ const SignInPage = () => {
         label: 'Username',
         name: 'username',
         type: 'email',
-        placeholder: 'user@company.com'
+        placeholder: 'user@enterprise.com'
     }
     const passwordInput = {
         label: 'Password',

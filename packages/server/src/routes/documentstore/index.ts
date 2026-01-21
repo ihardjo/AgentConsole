@@ -1,5 +1,5 @@
 import express from 'express'
-import { checkPermission, checkAnyPermission } from '../../enterprise/rbac/PermissionCheck'
+import { checkAnyPermission, checkPermission } from '../../custom-rbac/middleware'
 import documentStoreController from '../../controllers/documentstore'
 import { getMulterStorage } from '../../utils'
 

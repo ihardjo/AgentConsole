@@ -54,6 +54,9 @@ import { AddPersonalWorkspace1734074497540 } from '../../../enterprise/database/
 import { RefactorEnterpriseDatabase1737076223692 } from '../../../enterprise/database/migrations/mariadb/1737076223692-RefactorEnterpriseDatabase'
 import { ExecutionLinkWorkspaceId1746862866554 } from '../../../enterprise/database/migrations/mariadb/1746862866554-ExecutionLinkWorkspaceId'
 
+// Custom RBAC migrations
+import { mariadbCustomMigrations } from '../../custom-migrations/mariadb'
+
 export const mariadbMigrations = [
     Init1693840429259,
     ModifyChatFlow1693997791471,
@@ -108,5 +111,6 @@ export const mariadbMigrations = [
     ModifyChatflowType1755066758601,
     AddTextToSpeechToChatFlow1759419231100,
     AddChatFlowNameIndex1759424809984,
-    FixDocumentStoreFileChunkLongText1765000000000
+    FixDocumentStoreFileChunkLongText1765000000000,
+    ...mariadbCustomMigrations
 ]

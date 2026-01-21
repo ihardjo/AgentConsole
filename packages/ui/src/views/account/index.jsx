@@ -35,7 +35,7 @@ import PricingDialog from '@/ui-component/subscription/PricingDialog'
 import { IconAlertCircle, IconCreditCard, IconExternalLink, IconSparkles, IconX } from '@tabler/icons-react'
 
 // API
-import accountApi from '@/api/account.api'
+import accountApi from '@/api/accountManagement'
 import pricingApi from '@/api/pricing'
 import userApi from '@/api/user'
 

@@ -18,7 +18,7 @@ import { Telemetry } from './utils/telemetry'
 import flowiseApiV1Router from './routes'
 import errorHandlerMiddleware from './middlewares/errors'
 import { WHITELIST_URLS } from './utils/constants'
-import { initializeJwtCookieMiddleware, verifyToken, verifyTokenForBullMQDashboard } from './enterprise/middleware/passport'
+import { initializeJwtCookieMiddleware, verifyToken, verifyTokenForBullMQDashboard } from './custom-rbac/middleware/passport'
 import { IdentityManager } from './IdentityManager'
 import { SSEStreamer } from './utils/SSEStreamer'
 import { validateAPIKey } from './utils/validateKey'
@@ -30,17 +30,16 @@ import { QueueManager } from './queue/QueueManager'
 import { RedisEventSubscriber } from './queue/RedisEventSubscriber'
 import 'global-agent/bootstrap'
 import { UsageCacheManager } from './UsageCacheManager'
-import { Workspace } from './enterprise/database/entities/workspace.entity'
-import { Organization } from './enterprise/database/entities/organization.entity'
-import { GeneralRole, Role } from './enterprise/database/entities/role.entity'
+import { Workspace } from './custom-rbac/entities/workspace.entity'
+import { Organization } from './custom-rbac/entities/organization.entity'
+import { GeneralRole, Role } from './custom-rbac/entities/role.entity'
 import { migrateApiKeysFromJsonToDb } from './utils/apiKey'
 import { ExpressAdapter } from '@bull-board/express'
 
 declare global {
     namespace Express {
-        interface User extends LoggedInUser {}
-        interface Request {
-            user?: LoggedInUser
+        interface User extends LoggedInUser {
+            isApiKeyValidated?: boolean
         }
         namespace Multer {
             interface File {

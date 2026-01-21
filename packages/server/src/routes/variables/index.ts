@@ -1,6 +1,6 @@
 import express from 'express'
 import variablesController from '../../controllers/variables'
-import { checkAnyPermission, checkPermission } from '../../enterprise/rbac/PermissionCheck'
+import { checkAnyPermission, checkPermission } from '../../custom-rbac/middleware'
 
 const router = express.Router()
 

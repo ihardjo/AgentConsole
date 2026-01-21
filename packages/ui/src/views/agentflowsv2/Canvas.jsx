@@ -717,6 +717,7 @@ const AgentflowCanvas = () => {
                                 edgeTypes={edgeTypes}
                                 onConnect={onConnect}
                                 onInit={setReactFlowInstance}
+                                proOptions={{ hideAttribution: true }}
                                 fitView
                                 deleteKeyCode={canvas.canvasDialogShow ? null : ['Delete']}
                                 minZoom={0.5}
@@ -754,7 +755,7 @@ const AgentflowCanvas = () => {
                                         {isBackgroundEnabled ? <IconArtboard /> : <IconArtboardOff />}
                                     </button>
                                 </Controls>
-                                <MiniMap
+                                {/* <MiniMap
                                     nodeStrokeWidth={3}
                                     nodeColor={customization.isDarkMode ? '#2d2d2d' : '#e2e2e2'}
                                     nodeStrokeColor={customization.isDarkMode ? '#525252' : '#fff'}
@@ -762,7 +763,7 @@ const AgentflowCanvas = () => {
                                     style={{
                                         backgroundColor: customization.isDarkMode ? theme.palette.background.default : '#fff'
                                     }}
-                                />
+                                /> */}
                                 {isBackgroundEnabled && <Background color='#aaa' gap={16} />}
                                 <AddNodes
                                     isAgentCanvas={true}

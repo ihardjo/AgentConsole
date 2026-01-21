@@ -3,7 +3,7 @@ import { omit } from 'lodash'
 import { ICredentialReturnResponse } from '../../Interface'
 import { Credential } from '../../database/entities/Credential'
 import { WorkspaceShared } from '../../enterprise/database/entities/EnterpriseEntities'
-import { WorkspaceService } from '../../enterprise/services/workspace.service'
+import { WorkspaceManagementService } from '../../custom-rbac/services/workspace-management'
 import { getWorkspaceSearchOptions } from '../../enterprise/utils/ControllerServiceUtils'
 import { InternalFlowiseError } from '../../errors/internalFlowiseError'
 import { getErrorMessage } from '../../errors/utils'
@@ -72,8 +72,8 @@ const getAllCredentials = async (paramCredentialName: any, workspaceId: string) 
             }
             // get shared credentials
             if (workspaceId) {
-                const workspaceService = new WorkspaceService()
-                const sharedItems = (await workspaceService.getSharedItemsForWorkspace(workspaceId, 'credential')) as Credential[]
+                const workspaceManagementService = new WorkspaceManagementService()
+                const sharedItems = (await workspaceManagementService.getSharedItemsForWorkspace(workspaceId, 'credential')) as Credential[]
                 if (sharedItems.length) {
                     for (const sharedItem of sharedItems) {
                         // Check if paramCredentialName is array
@@ -104,8 +104,8 @@ const getAllCredentials = async (paramCredentialName: any, workspaceId: string) 
 
             // get shared credentials
             if (workspaceId) {
-                const workspaceService = new WorkspaceService()
-                const sharedItems = (await workspaceService.getSharedItemsForWorkspace(workspaceId, 'credential')) as Credential[]
+                const workspaceManagementService = new WorkspaceManagementService()
+                const sharedItems = (await workspaceManagementService.getSharedItemsForWorkspace(workspaceId, 'credential')) as Credential[]
                 if (sharedItems.length) {
                     for (const sharedItem of sharedItems) {
                         // @ts-ignore

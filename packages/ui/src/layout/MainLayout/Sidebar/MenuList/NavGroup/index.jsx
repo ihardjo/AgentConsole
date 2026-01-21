@@ -8,7 +8,6 @@ import { Divider, List, Typography } from '@mui/material'
 import NavItem from '../NavItem'
 import NavCollapse from '../NavCollapse'
 import { useAuth } from '@/hooks/useAuth'
-import { Available } from '@/ui-component/rbac/available'
 
 // ==============================|| SIDEBAR MENU LIST GROUP ||============================== //
 
@@ -36,6 +35,11 @@ const NavGroup = ({ item }) => {
     }
 
     const shouldDisplayMenu = (menu) => {
+        // If alwaysShow flag is set, always display the menu item
+        if (menu.alwaysShow) {
+            return true
+        }
+
         // Handle permission check
         if (menu.permission && !hasPermission(menu.permission)) {
             return false // Do not render if permission is lacking
@@ -68,6 +72,18 @@ const NavGroup = ({ item }) => {
         return nonprimaryGroups
     }
 
+    const shouldShowGroup = (group) => {
+        // If any child has alwaysShow flag, always show the group
+        const hasAlwaysShowChild = group.children.some((menu) => menu.alwaysShow)
+        if (hasAlwaysShowChild) {
+            return true
+        }
+
+        // Otherwise check if user has any of the group's permissions
+        const groupPermissions = group.children.map((menu) => menu.permission).filter(Boolean).join(',')
+        return groupPermissions ? hasPermission(groupPermissions) : true
+    }
+
     return (
         <>
             <List
@@ -89,23 +105,23 @@ const NavGroup = ({ item }) => {
             </List>
 
             {renderNonPrimaryGroups().map((group) => {
-                const groupPermissions = group.children.map((menu) => menu.permission).join(',')
+                // Check if group should be shown (either has alwaysShow items or user has permissions)
+                if (!shouldShowGroup(group)) return null
+
                 return (
-                    <Available key={group.id} permission={groupPermissions}>
-                        <>
-                            <Divider sx={{ height: '1px', borderColor: theme.palette.grey[900] + 25, my: 0 }} />
-                            <List
-                                subheader={
-                                    <Typography variant='caption' sx={{ ...theme.typography.subMenuCaption }} display='block' gutterBottom>
-                                        {group.title}
-                                    </Typography>
-                                }
-                                sx={{ p: '16px', py: 2, display: 'flex', flexDirection: 'column', gap: 1 }}
-                            >
-                                {group.children.map((menu) => listItems(menu))}
-                            </List>
-                        </>
-                    </Available>
+                    <div key={group.id}>
+                        <Divider sx={{ height: '1px', borderColor: theme.palette.grey[900] + 25, my: 0 }} />
+                        <List
+                            subheader={
+                                <Typography variant='caption' sx={{ ...theme.typography.subMenuCaption }} display='block' gutterBottom>
+                                    {group.title}
+                                </Typography>
+                            }
+                            sx={{ p: '16px', py: 2, display: 'flex', flexDirection: 'column', gap: 1 }}
+                        >
+                            {group.children.map((menu) => listItems(menu))}
+                        </List>
+                    </div>
                 )
             })}
         </>

@@ -61,7 +61,7 @@ import { gridSpacing } from '@/store/constant'
 import { useError } from '@/store/context/ErrorContext'
 
 const badges = ['POPULAR', 'NEW']
-const types = ['Chatflow', 'AgentflowV2', 'Tool']
+const types = ['AgentflowV2', 'Tool']
 const framework = ['Langchain', 'LlamaIndex']
 const MenuProps = {
     PaperProps: {
@@ -276,6 +276,8 @@ const Marketplace = () => {
     }
 
     function filterByType(data) {
+        // Exclude Chatflow items
+        if (data.type === 'Chatflow') return false
         return typeFilter.length > 0 ? typeFilter.includes(data.type) : true
     }
 
@@ -627,8 +629,8 @@ const Marketplace = () => {
                         {hasPermission('templates:marketplace') && hasPermission('templates:custom') && (
                             <Stack direction='row' justifyContent='space-between' sx={{ mb: 2 }}>
                                 <Tabs value={activeTabValue} onChange={handleTabChange} textColor='primary' aria-label='tabs'>
-                                    <PermissionTab permissionId='templates:marketplace' value={0} label='Community Templates' />
-                                    <PermissionTab permissionId='templates:custom' value={1} label='My Templates' />
+                                    <PermissionTab permissionId='templates:marketplace' value={0} label='Community' />
+                                    <PermissionTab permissionId='templates:custom' value={1} label='Within Organization' />
                                 </Tabs>
                                 <Autocomplete
                                     id='useCases'

@@ -13,7 +13,7 @@ import { Input } from '@/ui-component/input/Input'
 import { BackdropLoader } from '@/ui-component/loading/BackdropLoader'
 
 // API
-import accountApi from '@/api/account.api'
+import accountApi from '@/api/accountManagement'
 
 // utils
 import useNotifier from '@/utils/useNotifier'

@@ -1,7 +1,7 @@
 import { styled } from '@mui/system'
 import { buttonClasses } from '@mui/base/Button'
 import { Tab as BaseTab, tabClasses } from '@mui/base/Tab'
-import { blue } from './tabColors'
+import { purple } from './tabColors'
 
 export const Tab = styled(BaseTab)(
     ({ ...props }) => `
@@ -21,17 +21,17 @@ export const Tab = styled(BaseTab)(
   justify-content: center;
 
   &:hover {
-    background-color: ${props.sx?.backgroundColor || blue[400]};
+    background-color: ${props.sx?.backgroundColor || purple[400]};
   }
 
   &:focus {
     color: #fff;
-    outline: 3px solid ${props.sx?.backgroundColor || blue[200]};
+    outline: 3px solid ${props.sx?.backgroundColor || purple[200]};
   }
 
   &.${tabClasses.selected} {
     background-color: #fff;
-    color: ${blue[600]};
+    color: ${purple[600]};
   }
 
   &.${buttonClasses.disabled} {

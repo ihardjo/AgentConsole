@@ -55,6 +55,9 @@ import { AddPersonalWorkspace1734074497540 } from '../../../enterprise/database/
 import { RefactorEnterpriseDatabase1737076223692 } from '../../../enterprise/database/migrations/mysql/1737076223692-RefactorEnterpriseDatabase'
 import { ExecutionLinkWorkspaceId1746862866554 } from '../../../enterprise/database/migrations/mysql/1746862866554-ExecutionLinkWorkspaceId'
 
+// Custom RBAC migrations
+import { mysqlCustomMigrations } from '../../custom-migrations/mysql'
+
 export const mysqlMigrations = [
     Init1693840429259,
     ModifyChatFlow1693997791471,
@@ -110,5 +113,6 @@ export const mysqlMigrations = [
     ModifyChatflowType1755066758601,
     AddTextToSpeechToChatFlow1759419216034,
     AddChatFlowNameIndex1759424828558,
-    FixDocumentStoreFileChunkLongText1765000000000
+    FixDocumentStoreFileChunkLongText1765000000000,
+    ...mysqlCustomMigrations
 ]

@@ -4,7 +4,7 @@ import path from 'path'
 import { DeleteResult } from 'typeorm'
 import { v4 as uuidv4 } from 'uuid'
 import { CustomTemplate } from '../../database/entities/CustomTemplate'
-import { WorkspaceService } from '../../enterprise/services/workspace.service'
+import { WorkspaceManagementService } from '../../custom-rbac/services/workspace-management'
 import { getWorkspaceSearchOptions } from '../../enterprise/utils/ControllerServiceUtils'
 import { InternalFlowiseError } from '../../errors/internalFlowiseError'
 import { getErrorMessage } from '../../errors/utils'
@@ -181,8 +181,8 @@ const getAllCustomTemplates = async (workspaceId?: string): Promise<any> => {
         dbResponse.push(...templates)
         // get shared credentials
         if (workspaceId) {
-            const workspaceService = new WorkspaceService()
-            const sharedItems = (await workspaceService.getSharedItemsForWorkspace(workspaceId, 'custom_template')) as CustomTemplate[]
+            const workspaceManagementService = new WorkspaceManagementService()
+            const sharedItems = (await workspaceManagementService.getSharedItemsForWorkspace(workspaceId, 'custom_template')) as CustomTemplate[]
             if (sharedItems && sharedItems.length) {
                 _modifyTemplates(sharedItems)
                 // add shared = true flag to all shared items, to differentiate them in the UI

@@ -51,6 +51,9 @@ import { AddPersonalWorkspace1734074497540 } from '../../../enterprise/database/
 import { RefactorEnterpriseDatabase1737076223692 } from '../../../enterprise/database/migrations/sqlite/1737076223692-RefactorEnterpriseDatabase'
 import { ExecutionLinkWorkspaceId1746862866554 } from '../../../enterprise/database/migrations/sqlite/1746862866554-ExecutionLinkWorkspaceId'
 
+// Custom RBAC migrations
+import { sqliteCustomMigrations } from '../../custom-migrations/sqlite'
+
 export const sqliteMigrations = [
     Init1693835579790,
     ModifyChatFlow1693920824108,
@@ -102,5 +105,6 @@ export const sqliteMigrations = [
     AddTextToSpeechToChatFlow1754986486669,
     ModifyChatflowType1755066758601,
     AddTextToSpeechToChatFlow1759419136055,
-    AddChatFlowNameIndex1759424923093
+    AddChatFlowNameIndex1759424923093,
+    ...sqliteCustomMigrations
 ]

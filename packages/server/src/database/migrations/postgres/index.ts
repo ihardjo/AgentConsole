@@ -53,6 +53,9 @@ import { AddPersonalWorkspace1734074497540 } from '../../../enterprise/database/
 import { RefactorEnterpriseDatabase1737076223692 } from '../../../enterprise/database/migrations/postgres/1737076223692-RefactorEnterpriseDatabase'
 import { ExecutionLinkWorkspaceId1746862866554 } from '../../../enterprise/database/migrations/postgres/1746862866554-ExecutionLinkWorkspaceId'
 
+// Custom RBAC migrations
+import { postgresCustomMigrations } from '../../custom-migrations/postgres'
+
 export const postgresMigrations = [
     Init1693891895163,
     ModifyChatFlow1693995626941,
@@ -106,5 +109,6 @@ export const postgresMigrations = [
     AddTextToSpeechToChatFlow1754986480347,
     ModifyChatflowType1755066758601,
     AddTextToSpeechToChatFlow1759419194331,
-    AddChatFlowNameIndex1759424903973
+    AddChatFlowNameIndex1759424903973,
+    ...postgresCustomMigrations
 ]
