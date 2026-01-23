@@ -37,9 +37,10 @@ export const DefaultRedirect = () => {
     const isAuthenticated = useSelector((state) => state.auth.isAuthenticated)
 
     // Define the order of routes to check (based on the menu order in dashboard.js)
+    // Agentflows is now the default route, Chatflows is deprecated
     const routesToCheck = [
-        { component: Chatflows, permission: 'chatflows:view' },
         { component: Agentflows, permission: 'agentflows:view' },
+        { component: Chatflows, permission: 'chatflows:view' },
         { component: Executions, permission: 'executions:view' },
         { component: Assistants, permission: 'assistants:view' },
         { component: Marketplaces, permission: 'templates:marketplace,templates:custom' },
@@ -68,14 +69,14 @@ export const DefaultRedirect = () => {
         return <Login />
     }
 
-    // For open source, show chatflows (no permission checks)
+    // For open source, show agentflows (no permission checks)
     if (isOpenSource) {
-        return <Chatflows />
+        return <Agentflows />
     }
 
-    // For global admins, show chatflows (they have access to everything)
+    // For global admins, show agentflows (they have access to everything)
     if (isGlobal) {
-        return <Chatflows />
+        return <Agentflows />
     }
 
     // Check each route in order and return the first accessible component
