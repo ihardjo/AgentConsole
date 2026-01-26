@@ -24,6 +24,15 @@ RUN pnpm install
 
 RUN pnpm build
 
+# Create data directories that the application needs
+# These can be overridden by environment variables (DATABASE_PATH, LOG_PATH, BLOB_STORAGE_PATH)
+RUN mkdir -p /flowise_data && \
+    mkdir -p /flowise_data/logs && \
+    mkdir -p /flowise_data/storage && \
+    mkdir -p /root/.flowise && \
+    mkdir -p /root/.flowise/logs && \
+    mkdir -p /root/.flowise/storage
+
 # --- Healthcheck Setup ---
 
 WORKDIR /app/healthcheck
