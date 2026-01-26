@@ -48,13 +48,17 @@ const Tools = () => {
     const onChange = (page, pageLimit) => {
         setCurrentPage(page)
         setPageLimit(pageLimit)
-        refresh(page, pageLimit)
+        refresh(page, pageLimit, search)
     }
 
-    const refresh = (page, limit) => {
+    const refresh = (page, limit, searchQuery) => {
         const params = {
             page: page || currentPage,
             limit: limit || pageLimit
+        }
+        // Add search parameter if search query exists
+        if (searchQuery && searchQuery.trim()) {
+            params.search = searchQuery.trim()
         }
         getAllToolsApi.request(params)
     }
@@ -122,26 +126,27 @@ const Tools = () => {
 
     const onConfirm = () => {
         setShowDialog(false)
-        refresh(currentPage, pageLimit)
+        refresh(currentPage, pageLimit, search)
     }
 
     const [search, setSearch] = useState('')
     const onSearchChange = (event) => {
-        setSearch(event.target.value)
+        const newSearch = event.target.value
+        setSearch(newSearch)
         // Reset to page 1 when search changes to show results from the beginning
-        if (currentPage !== 1) {
-            setCurrentPage(1)
-        }
+        setCurrentPage(1)
+        // Trigger refresh with new search term
+        refresh(1, pageLimit, newSearch)
     }
 
     function filterTools(data) {
-        return (
-            data.name.toLowerCase().indexOf(search.toLowerCase()) > -1 || data.description.toLowerCase().indexOf(search.toLowerCase()) > -1
-        )
+        // No longer needed - filtering is done server-side
+        // Kept for backwards compatibility in case it's used elsewhere
+        return true
     }
 
     useEffect(() => {
-        refresh(currentPage, pageLimit)
+        refresh(currentPage, pageLimit, search)
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
@@ -244,13 +249,13 @@ const Tools = () => {
                             <>
                                 {!view || view === 'card' ? (
                                     <Box display='grid' gridTemplateColumns='repeat(3, 1fr)' gap={gridSpacing}>
-                                        {getAllToolsApi.data?.data?.filter(filterTools).map((data, index) => (
+                                        {getAllToolsApi.data?.data?.map((data, index) => (
                                             <ItemCard data={data} key={index} onClick={() => edit(data)} />
                                         ))}
                                     </Box>
                                 ) : (
                                     <ToolsTable
-                                        data={getAllToolsApi.data?.data?.filter(filterTools) || []}
+                                        data={getAllToolsApi.data?.data || []}
                                         isLoading={isLoading}
                                         onSelect={edit}
                                     />

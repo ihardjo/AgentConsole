@@ -51,17 +51,18 @@ const Documents = () => {
     }
 
     function filterDocStores(data) {
-        return (
-            data.name.toLowerCase().indexOf(search.toLowerCase()) > -1 || data.description.toLowerCase().indexOf(search.toLowerCase()) > -1
-        )
+        // No longer needed - filtering is done server-side
+        // Kept for backwards compatibility in case it's used elsewhere
+        return true
     }
 
     const onSearchChange = (event) => {
-        setSearch(event.target.value)
+        const newSearch = event.target.value
+        setSearch(newSearch)
         // Reset to page 1 when search changes to show results from the beginning
-        if (currentPage !== 1) {
-            setCurrentPage(1)
-        }
+        setCurrentPage(1)
+        // Trigger refresh with new search term
+        applyFilters(1, pageLimit, newSearch)
     }
 
     const goToDocumentStore = (id) => {
@@ -81,11 +82,11 @@ const Documents = () => {
 
     const onConfirm = () => {
         setShowDialog(false)
-        applyFilters(currentPage, pageLimit)
+        applyFilters(currentPage, pageLimit, search)
     }
 
     useEffect(() => {
-        applyFilters(currentPage, pageLimit)
+        applyFilters(currentPage, pageLimit, search)
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
@@ -97,14 +98,18 @@ const Documents = () => {
     const onChange = (page, pageLimit) => {
         setCurrentPage(page)
         setPageLimit(pageLimit)
-        applyFilters(page, pageLimit)
+        applyFilters(page, pageLimit, search)
     }
 
-    const applyFilters = (page, limit) => {
+    const applyFilters = (page, limit, searchQuery) => {
         setLoading(true)
         const params = {
             page: page || currentPage,
             limit: limit || pageLimit
+        }
+        // Add search parameter if search query exists
+        if (searchQuery && searchQuery.trim()) {
+            params.search = searchQuery.trim()
         }
         getAllDocumentStores.request(params)
     }
@@ -222,7 +227,7 @@ const Documents = () => {
                         <React.Fragment>
                             {!view || view === 'card' ? (
                                 <Box display='grid' gridTemplateColumns='repeat(3, 1fr)' gap={gridSpacing}>
-                                    {docStores?.filter(filterDocStores).map((data, index) => (
+                                    {docStores?.map((data, index) => (
                                         <DocumentStoreCard
                                             key={index}
                                             images={images[data.id]}
@@ -234,7 +239,7 @@ const Documents = () => {
                             ) : (
                                 <DocumentStoreTable
                                     isLoading={isLoading}
-                                    data={docStores?.filter(filterDocStores)}
+                                    data={docStores}
                                     images={images}
                                     onRowClick={(row) => goToDocumentStore(row.id)}
                                 />

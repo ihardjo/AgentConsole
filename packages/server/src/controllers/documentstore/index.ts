@@ -44,6 +44,7 @@ const createDocumentStore = async (req: Request, res: Response, next: NextFuncti
 const getAllDocumentStores = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { page, limit } = getPageAndLimitParams(req)
+        const search = req.query?.search as string | undefined
 
         const workspaceId = req.user?.activeWorkspaceId
         if (!workspaceId) {
@@ -52,7 +53,7 @@ const getAllDocumentStores = async (req: Request, res: Response, next: NextFunct
                 `Error: documentStoreController.getAllDocumentStores - workspaceId not provided!`
             )
         }
-        const apiResponse: any = await documentStoreService.getAllDocumentStores(workspaceId, page, limit)
+        const apiResponse: any = await documentStoreService.getAllDocumentStores(workspaceId, page, limit, search)
         if (apiResponse?.total >= 0) {
             return res.json({
                 total: apiResponse.total,

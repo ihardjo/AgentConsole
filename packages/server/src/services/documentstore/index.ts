@@ -78,7 +78,7 @@ const createDocumentStore = async (newDocumentStore: DocumentStore, orgId: strin
     }
 }
 
-const getAllDocumentStores = async (workspaceId: string, page: number = -1, limit: number = -1) => {
+const getAllDocumentStores = async (workspaceId: string, page: number = -1, limit: number = -1, search?: string) => {
     try {
         const appServer = getRunningExpressApp()
         const queryBuilder = appServer.AppDataSource.getRepository(DocumentStore)
@@ -90,6 +90,14 @@ const getAllDocumentStores = async (workspaceId: string, page: number = -1, limi
             queryBuilder.take(limit)
         }
         queryBuilder.andWhere('doc_store.workspaceId = :workspaceId', { workspaceId })
+
+        // Add search filter if search term is provided
+        if (search && search.trim()) {
+            queryBuilder.andWhere(
+                '(LOWER(doc_store.name) LIKE LOWER(:search) OR LOWER(doc_store.description) LIKE LOWER(:search))',
+                { search: `%${search.trim()}%` }
+            )
+        }
 
         const [data, total] = await queryBuilder.getManyAndCount()
 

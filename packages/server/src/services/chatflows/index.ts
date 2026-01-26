@@ -138,7 +138,7 @@ const deleteChatflow = async (chatflowId: string, orgId: string, workspaceId: st
     }
 }
 
-const getAllChatflows = async (type?: ChatflowType, workspaceId?: string, page: number = -1, limit: number = -1) => {
+const getAllChatflows = async (type?: ChatflowType, workspaceId?: string, page: number = -1, limit: number = -1, search?: string) => {
     try {
         const appServer = getRunningExpressApp()
 
@@ -161,6 +161,15 @@ const getAllChatflows = async (type?: ChatflowType, workspaceId?: string, page: 
             queryBuilder.andWhere('chat_flow.type = :type', { type: 'CHATFLOW' })
         }
         if (workspaceId) queryBuilder.andWhere('chat_flow.workspaceId = :workspaceId', { workspaceId })
+        
+        // Add search filter if search term is provided
+        if (search && search.trim()) {
+            queryBuilder.andWhere(
+                '(LOWER(chat_flow.name) LIKE LOWER(:search) OR LOWER(chat_flow.category) LIKE LOWER(:search) OR CAST(chat_flow.id AS TEXT) LIKE :search)',
+                { search: `%${search.trim()}%` }
+            )
+        }
+        
         const [data, total] = await queryBuilder.getManyAndCount()
 
         if (page > 0 && limit > 0) {

@@ -5,11 +5,17 @@ import { getErrorMessage } from '../../errors/utils'
 import { Evaluator } from '../../database/entities/Evaluator'
 import { EvaluatorDTO } from '../../Interface.Evaluation'
 
-const getAllEvaluators = async (workspaceId: string, page: number = -1, limit: number = -1) => {
+const getAllEvaluators = async (workspaceId: string, page: number = -1, limit: number = -1, search?: string) => {
     try {
         const appServer = getRunningExpressApp()
         const queryBuilder = appServer.AppDataSource.getRepository(Evaluator).createQueryBuilder('ev').orderBy('ev.updatedDate', 'DESC')
         queryBuilder.andWhere('ev.workspaceId = :workspaceId', { workspaceId })
+        
+        // Add search filter if search term is provided
+        if (search && search.trim()) {
+            queryBuilder.andWhere('LOWER(ev.name) LIKE LOWER(:search)', { search: `%${search.trim()}%` })
+        }
+        
         if (page > 0 && limit > 0) {
             queryBuilder.skip((page - 1) * limit)
             queryBuilder.take(limit)
