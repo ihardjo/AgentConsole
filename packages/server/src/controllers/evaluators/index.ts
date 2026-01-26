@@ -7,6 +7,7 @@ import { getPageAndLimitParams } from '../../utils/pagination'
 const getAllEvaluators = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { page, limit } = getPageAndLimitParams(req)
+        const search = req.query?.search as string | undefined
         const workspaceId = req.user?.activeWorkspaceId
         if (!workspaceId) {
             throw new InternalFlowiseError(
@@ -14,7 +15,7 @@ const getAllEvaluators = async (req: Request, res: Response, next: NextFunction)
                 `Error: evaluatorService.getAllEvaluators - workspace ${workspaceId} not found!`
             )
         }
-        const apiResponse = await evaluatorService.getAllEvaluators(workspaceId, page, limit)
+        const apiResponse = await evaluatorService.getAllEvaluators(workspaceId, page, limit, search)
         return res.json(apiResponse)
     } catch (error) {
         next(error)

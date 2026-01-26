@@ -44,7 +44,7 @@ const deleteTool = async (toolId: string, workspaceId: string): Promise<any> => 
     }
 }
 
-const getAllTools = async (workspaceId?: string, page: number = -1, limit: number = -1) => {
+const getAllTools = async (workspaceId?: string, page: number = -1, limit: number = -1, search?: string) => {
     try {
         const appServer = getRunningExpressApp()
         const queryBuilder = appServer.AppDataSource.getRepository(Tool).createQueryBuilder('tool').orderBy('tool.updatedDate', 'DESC')
@@ -54,6 +54,15 @@ const getAllTools = async (workspaceId?: string, page: number = -1, limit: numbe
             queryBuilder.take(limit)
         }
         if (workspaceId) queryBuilder.andWhere('tool.workspaceId = :workspaceId', { workspaceId })
+        
+        // Add search filter if search term is provided
+        if (search && search.trim()) {
+            queryBuilder.andWhere(
+                '(LOWER(tool.name) LIKE LOWER(:search) OR LOWER(tool.description) LIKE LOWER(:search))',
+                { search: `%${search.trim()}%` }
+            )
+        }
+        
         const [data, total] = await queryBuilder.getManyAndCount()
 
         if (page > 0 && limit > 0) {

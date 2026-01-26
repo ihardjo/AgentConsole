@@ -57,13 +57,17 @@ const Agentflows = () => {
     const onChange = (page, pageLimit) => {
         setCurrentPage(page)
         setPageLimit(pageLimit)
-        refresh(page, pageLimit, agentflowVersion)
+        refresh(page, pageLimit, agentflowVersion, search)
     }
 
-    const refresh = (page, limit, nextView) => {
+    const refresh = (page, limit, nextView, searchQuery) => {
         const params = {
             page: page || currentPage,
             limit: limit || pageLimit
+        }
+        // Add search parameter if search query exists
+        if (searchQuery && searchQuery.trim()) {
+            params.search = searchQuery.trim()
         }
         getAllAgentflows.request(nextView === 'v2' ? 'AGENTFLOW' : 'MULTIAGENT', params)
     }
@@ -78,19 +82,26 @@ const Agentflows = () => {
         if (nextView === null) return
         localStorage.setItem('agentFlowVersion', nextView)
         setAgentflowVersion(nextView)
-        refresh(1, pageLimit, nextView)
+        // Reset search when changing version
+        setSearch('')
+        setCurrentPage(1)
+        refresh(1, pageLimit, nextView, '')
     }
 
     const onSearchChange = (event) => {
-        setSearch(event.target.value)
+        const newSearch = event.target.value
+        setSearch(newSearch)
+        // Reset to page 1 when search changes to show results from the beginning
+        setCurrentPage(1)
+        // Trigger refresh with new search term
+        refresh(1, pageLimit, agentflowVersion, newSearch)
     }
 
     function filterFlows(data) {
-        return (
-            data.name.toLowerCase().indexOf(search.toLowerCase()) > -1 ||
-            (data.category && data.category.toLowerCase().indexOf(search.toLowerCase()) > -1) ||
-            data.id.toLowerCase().indexOf(search.toLowerCase()) > -1
-        )
+        // No longer needed - filtering is done server-side
+        // Kept for backwards compatibility in case it's used elsewhere
+        // Note: Server now handles ID search with CAST for UUID compatibility
+        return true
     }
 
     const addNew = () => {
@@ -114,7 +125,7 @@ const Agentflows = () => {
     }
 
     useEffect(() => {
-        refresh(currentPage, pageLimit, agentflowVersion)
+        refresh(currentPage, pageLimit, agentflowVersion, search)
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
@@ -304,7 +315,7 @@ const Agentflows = () => {
                         <>
                             {!view || view === 'card' ? (
                                 <Box display='grid' gridTemplateColumns='repeat(3, 1fr)' gap={gridSpacing}>
-                                    {getAllAgentflows.data?.data.filter(filterFlows).map((data, index) => (
+                                    {getAllAgentflows.data?.data.map((data, index) => (
                                         <ItemCard
                                             key={index}
                                             onClick={() => goToCanvas(data)}

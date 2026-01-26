@@ -62,19 +62,28 @@ const Evaluators = () => {
     const onChange = (page, pageLimit) => {
         setCurrentPage(page)
         setPageLimit(pageLimit)
-        refresh(page, pageLimit)
+        refresh(page, pageLimit, search)
     }
 
-    const refresh = (page, limit) => {
+    const refresh = (page, limit, searchQuery) => {
         const params = {
             page: page || currentPage,
             limit: limit || pageLimit
+        }
+        // Add search parameter if search query exists
+        if (searchQuery && searchQuery.trim()) {
+            params.search = searchQuery.trim()
         }
         getAllEvaluators.request(params)
     }
 
     const onSearchChange = (event) => {
-        setSearch(event.target.value)
+        const newSearch = event.target.value
+        setSearch(newSearch)
+        // Reset to page 1 when search changes to show results from the beginning
+        setCurrentPage(1)
+        // Trigger refresh with new search term
+        refresh(1, pageLimit, newSearch)
     }
 
     const newEvaluator = () => {
@@ -148,15 +157,17 @@ const Evaluators = () => {
 
     const onConfirm = () => {
         setShowEvaluatorDialog(false)
-        refresh(currentPage, pageLimit)
+        refresh(currentPage, pageLimit, search)
     }
 
     function filterDatasets(data) {
-        return data.name.toLowerCase().indexOf(search.toLowerCase()) > -1
+        // No longer needed - filtering is done server-side
+        // Kept for backwards compatibility in case it's used elsewhere
+        return true
     }
 
     useEffect(() => {
-        refresh(currentPage, pageLimit)
+        refresh(currentPage, pageLimit, search)
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
@@ -271,7 +282,7 @@ const Evaluators = () => {
                                                 </>
                                             ) : (
                                                 <>
-                                                    {evaluators.filter(filterDatasets).map((ds, index) => (
+                                                    {evaluators.map((ds, index) => (
                                                         <>
                                                             <StyledTableRow
                                                                 hover
