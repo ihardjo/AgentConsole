@@ -115,6 +115,10 @@ const Variables = () => {
 
     const onSearchChange = (event) => {
         setSearch(event.target.value)
+        // Reset to page 1 when search changes to show results from the beginning
+        if (currentPage !== 1) {
+            setCurrentPage(1)
+        }
     }
     function filterVariables(data) {
         return data.name.toLowerCase().indexOf(search.toLowerCase()) > -1
