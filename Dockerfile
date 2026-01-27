@@ -43,13 +43,13 @@ RUN mkdir -p /flowise_data && \
     mkdir -p /root/.flowise/logs && \
     mkdir -p /root/.flowise/storage
 
-# Give the node user ownership of the application files and data directories
-RUN chown -R node:node . && \
-    chown -R node:node /flowise_data && \
-    chown -R node:node /root/.flowise
+# # Give the node user ownership of the application files and data directories
+# RUN chown -R node:node . && \
+#     chown -R node:node /flowise_data && \
+#     chown -R node:node /root/.flowise
 
-# Switch to non-root user (node user already exists in node:20-alpine)
-USER node
+# # Switch to non-root user (node user already exists in node:20-alpine)
+# USER node
 
 EXPOSE 3000
 
