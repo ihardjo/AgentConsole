@@ -188,6 +188,7 @@ const Agentflows = () => {
                     <ViewHeader
                         onSearchChange={onSearchChange}
                         search={true}
+                        searchValue={search}
                         searchPlaceholder='Search Name or Category'
                         title='AI Agents Flows'
                         description='Multi-agent systems, workflow orchestration'

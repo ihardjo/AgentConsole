@@ -462,6 +462,7 @@ const WorkspaceManagement = () => {
                             isEditButton={false}
                             onSearchChange={onSearchChange}
                             search={true}
+                            searchValue={search}
                             title='Workspace Management'
                             searchPlaceholder='Search Workspaces'
                         >

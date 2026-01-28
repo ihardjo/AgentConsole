@@ -317,6 +317,7 @@ const WorkspaceUserManagement = () => {
                             isEditButton={false}
                             onBack={() => window.history.back()}
                             search={workspaceUsers.length > 0}
+                            searchValue={search}
                             onSearchChange={onSearchChange}
                             searchPlaceholder={'Search Users'}
                             title={(workspace?.name || '') + ': Workspace Users'}

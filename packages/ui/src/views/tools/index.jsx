@@ -170,6 +170,7 @@ const Tools = () => {
                         <ViewHeader
                             onSearchChange={onSearchChange}
                             search={true}
+                            searchValue={search}
                             searchPlaceholder='Search Tools'
                             title='Tools'
                             description='External functions or APIs the agent can use to take action'

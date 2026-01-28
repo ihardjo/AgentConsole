@@ -195,6 +195,7 @@ const Evaluators = () => {
                             isEditButton={false}
                             onSearchChange={onSearchChange}
                             search={true}
+                            searchValue={search}
                             title='Evaluators'
                             description=''
                         >

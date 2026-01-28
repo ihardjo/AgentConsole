@@ -395,6 +395,7 @@ const APIKey = () => {
                         <ViewHeader
                             onSearchChange={onSearchChange}
                             search={true}
+                            searchValue={search}
                             searchPlaceholder='Search API Keys'
                             title='API Keys'
                             description='Flowise API & SDK authentication keys'

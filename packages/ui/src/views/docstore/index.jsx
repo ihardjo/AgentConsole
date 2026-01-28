@@ -163,6 +163,7 @@ const Documents = () => {
                     <ViewHeader
                         onSearchChange={onSearchChange}
                         search={hasDocStores}
+                        searchValue={search}
                         searchPlaceholder='Search Name'
                         title='Document Store'
                         description='Store and upsert documents for LLM retrieval (RAG)'

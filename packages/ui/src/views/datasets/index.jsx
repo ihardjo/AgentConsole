@@ -209,6 +209,7 @@ const EvalDatasets = () => {
                             isEditButton={false}
                             onSearchChange={onSearchChange}
                             search={true}
+                            searchValue={search}
                             title='Datasets'
                             description=''
                         >
