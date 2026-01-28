@@ -145,6 +145,7 @@ const Chatflows = () => {
                     <ViewHeader
                         onSearchChange={onSearchChange}
                         search={true}
+                        searchValue={search}
                         searchPlaceholder='Search Name or Category'
                         title='Chatflows'
                         description='Build single-agent systems, chatbots and simple LLM flows'

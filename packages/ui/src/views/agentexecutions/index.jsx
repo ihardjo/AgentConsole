@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 
@@ -33,6 +33,7 @@ import { Available } from '@/ui-component/rbac/available'
 import useApi from '@/hooks/useApi'
 import executionsApi from '@/api/executions'
 import { useSelector } from 'react-redux'
+import { useDebounceValue } from '@/hooks/useDebounce'
 
 // icons
 import execution_empty from '@/assets/images/executions_empty.svg'
@@ -72,6 +73,16 @@ const AgentExecutions = () => {
         sessionId: ''
     })
 
+    // Debounce delay for search inputs (300ms is standard best practice)
+    const DEBOUNCE_DELAY = 300
+
+    // Debounced values for text search fields to avoid excessive API calls
+    const debouncedAgentflowName = useDebounceValue(filters.agentflowName, DEBOUNCE_DELAY)
+    const debouncedSessionId = useDebounceValue(filters.sessionId, DEBOUNCE_DELAY)
+
+    // Track if initial load has completed
+    const isInitialMount = useRef(true)
+
     const handleFilterChange = (field, value) => {
         setFilters({
             ...filters,
@@ -99,22 +110,25 @@ const AgentExecutions = () => {
         applyFilters(page, pageLimit)
     }
 
-    const applyFilters = (page, limit) => {
+    const applyFilters = useCallback((page, limit, overrideFilters = {}) => {
         setLoading(true)
         // Ensure page and limit are numbers, not objects
         const pageNum = typeof page === 'number' ? page : currentPage
         const limitNum = typeof limit === 'number' ? limit : pageLimit
+
+        // Use overrideFilters for debounced values, otherwise use current filters
+        const currentFilters = { ...filters, ...overrideFilters }
 
         const params = {
             page: pageNum,
             limit: limitNum
         }
 
-        if (filters.state) params.state = filters.state
+        if (currentFilters.state) params.state = currentFilters.state
 
         // Create date strings that preserve the exact date values
-        if (filters.startDate) {
-            const date = new Date(filters.startDate)
+        if (currentFilters.startDate) {
+            const date = new Date(currentFilters.startDate)
             // Format date as YYYY-MM-DD and set to start of day in UTC
             // This ensures the server sees the same date we've selected regardless of timezone
             const year = date.getFullYear()
@@ -123,8 +137,8 @@ const AgentExecutions = () => {
             params.startDate = `${year}-${month}-${day}T00:00:00.000Z`
         }
 
-        if (filters.endDate) {
-            const date = new Date(filters.endDate)
+        if (currentFilters.endDate) {
+            const date = new Date(currentFilters.endDate)
             // Format date as YYYY-MM-DD and set to end of day in UTC
             const year = date.getFullYear()
             const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -132,12 +146,12 @@ const AgentExecutions = () => {
             params.endDate = `${year}-${month}-${day}T23:59:59.999Z`
         }
 
-        if (filters.agentflowId) params.agentflowId = filters.agentflowId
-        if (filters.agentflowName) params.agentflowName = filters.agentflowName
-        if (filters.sessionId) params.sessionId = filters.sessionId
+        if (currentFilters.agentflowId) params.agentflowId = currentFilters.agentflowId
+        if (currentFilters.agentflowName) params.agentflowName = currentFilters.agentflowName
+        if (currentFilters.sessionId) params.sessionId = currentFilters.sessionId
 
         getAllExecutions.request(params)
-    }
+    }, [currentPage, pageLimit, filters, getAllExecutions])
 
     const resetFilters = () => {
         setFilters({
@@ -176,6 +190,24 @@ const AgentExecutions = () => {
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
+
+    // Auto-apply filters when debounced text search values change
+    // This provides real-time search as user types, with debounce to avoid excessive API calls
+    useEffect(() => {
+        // Skip the initial mount to avoid double API calls
+        if (isInitialMount.current) {
+            isInitialMount.current = false
+            return
+        }
+
+        // Reset to page 1 when search terms change
+        setCurrentPage(1)
+        applyFilters(1, pageLimit, {
+            agentflowName: debouncedAgentflowName,
+            sessionId: debouncedSessionId
+        })
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [debouncedAgentflowName, debouncedSessionId])
 
     useEffect(() => {
         if (getAllExecutions.data) {

@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types'
-import { useRef } from 'react'
+import { useRef, useState, useEffect, useCallback } from 'react'
 
 // material-ui
 import { IconButton, Box, OutlinedInput, Toolbar, Typography } from '@mui/material'
@@ -12,6 +12,9 @@ import { IconSearch, IconArrowLeft, IconEdit } from '@tabler/icons-react'
 import useSearchShortcut from '@/hooks/useSearchShortcut'
 import { getOS } from '@/utils/genericHelper'
 
+// Default debounce delay (300ms is industry standard for search inputs)
+const DEFAULT_DEBOUNCE_DELAY = 300
+
 const os = getOS()
 const isMac = os === 'macos'
 const isDesktop = isMac || os === 'windows' || os === 'linux'
@@ -23,6 +26,8 @@ const ViewHeader = ({
     onSearchChange,
     search,
     searchPlaceholder = 'Search',
+    searchValue,
+    debounceDelay = DEFAULT_DEBOUNCE_DELAY,
     title,
     description,
     isBackButton,
@@ -33,6 +38,48 @@ const ViewHeader = ({
     const theme = useTheme()
     const searchInputRef = useRef()
     useSearchShortcut(searchInputRef)
+
+    // Internal state for controlled input when debouncing
+    const [internalSearchValue, setInternalSearchValue] = useState(searchValue || '')
+    const debounceTimerRef = useRef(null)
+    const isFirstRender = useRef(true)
+
+    // Sync internal value with external searchValue prop
+    useEffect(() => {
+        if (searchValue !== undefined) {
+            setInternalSearchValue(searchValue)
+        }
+    }, [searchValue])
+
+    // Debounced search handler
+    const handleDebouncedSearch = useCallback(
+        (event) => {
+            const value = event.target.value
+            setInternalSearchValue(value)
+
+            // Clear any existing timer
+            if (debounceTimerRef.current) {
+                clearTimeout(debounceTimerRef.current)
+            }
+
+            // Set up new debounced call
+            debounceTimerRef.current = setTimeout(() => {
+                if (onSearchChange) {
+                    onSearchChange(event)
+                }
+            }, debounceDelay)
+        },
+        [onSearchChange, debounceDelay]
+    )
+
+    // Cleanup timer on unmount
+    useEffect(() => {
+        return () => {
+            if (debounceTimerRef.current) {
+                clearTimeout(debounceTimerRef.current)
+            }
+        }
+    }, [])
 
     return (
         <Box sx={{ flexGrow: 1, py: 1.25, width: '100%' }}>
@@ -110,7 +157,8 @@ const ViewHeader = ({
                             }}
                             variant='outlined'
                             placeholder={`${searchPlaceholder} ${isDesktop ? keyboardShortcut : ''}`}
-                            onChange={onSearchChange}
+                            value={internalSearchValue}
+                            onChange={handleDebouncedSearch}
                             startAdornment={
                                 <Box
                                     sx={{
@@ -141,6 +189,8 @@ ViewHeader.propTypes = {
     onSearchChange: PropTypes.func,
     search: PropTypes.bool,
     searchPlaceholder: PropTypes.string,
+    searchValue: PropTypes.string,
+    debounceDelay: PropTypes.number,
     title: PropTypes.string,
     description: PropTypes.string,
     isBackButton: PropTypes.bool,
