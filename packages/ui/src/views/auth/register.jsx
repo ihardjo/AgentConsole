@@ -174,7 +174,7 @@ const RegisterPage = () => {
                 setAuthError(errorMessages.join(', '))
             }
         } else if (isOpenSource) {
-            // Open Source without token - initial owner registration
+            // Open Source - can be initial owner registration OR invited user with token
             const result = RegisterCloudUserSchema.safeParse({
                 username,
                 email,
@@ -187,7 +187,8 @@ const RegisterPage = () => {
                     user: {
                         name: username,
                         email,
-                        credential: password
+                        credential: password,
+                        tempToken: token
                     }
                 }
                 await registerApi.request(body)
