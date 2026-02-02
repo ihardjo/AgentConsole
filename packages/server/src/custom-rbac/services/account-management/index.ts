@@ -180,8 +180,12 @@ export class AccountService {
                     data.user.status = UserStatus.ACTIVE
                     data.organizationUser.status = OrganizationUserStatus.ACTIVE
                     data.organizationUser.role = await this.roleService.readGeneralRoleByName(GeneralRole.MEMBER, queryRunner)
-                    data.workspace.name = WorkspaceName.DEFAULT_PERSONAL_WORKSPACE
-                    data.workspaceUser.role = await this.roleService.readGeneralRoleByName(GeneralRole.PERSONAL_WORKSPACE, queryRunner)
+                    // Skip personal workspace creation for invited users - they will use the workspaces they were invited to
+                    data.organizationUser.organizationId = data.organization.id
+                    data.organizationUser.userId = data.user.id
+                    data.organizationUser.createdBy = data.user.createdBy
+                    data.organizationUser = this.organizationUserService.createNewOrganizationUser(data.organizationUser, queryRunner)
+                    return data
                 } else {
                     // New owner registration
                     await this.ensureOneOrganizationOnly(queryRunner)
@@ -278,8 +282,13 @@ export class AccountService {
             data.user = await this.userService.saveUser(data.user, queryRunner)
             data.organization = await this.organizationservice.saveOrganization(data.organization, queryRunner)
             data.organizationUser = await this.organizationUserService.saveOrganizationUser(data.organizationUser, queryRunner)
-            data.workspace = await this.workspaceService.saveWorkspace(data.workspace, queryRunner)
-            data.workspaceUser = await this.workspaceUserService.saveWorkspaceUser(data.workspaceUser, queryRunner)
+            // Only save workspace and workspaceUser if they were created (not for invited users)
+            if (data.workspace.id) {
+                data.workspace = await this.workspaceService.saveWorkspace(data.workspace, queryRunner)
+            }
+            if (data.workspaceUser.workspaceId) {
+                data.workspaceUser = await this.workspaceUserService.saveWorkspaceUser(data.workspaceUser, queryRunner)
+            }
             if (
                 data.workspace.id &&
                 platform === Platform.OPEN_SOURCE &&
