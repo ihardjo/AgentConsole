@@ -210,7 +210,7 @@ const dashboard = {
                     id: 'agentEvaluation',
                     title: 'Agent Evaluation',
                     type: 'item',
-                    url: 'https://langfuse.accentureid.ai/',
+                    url: import.meta.env.VITE_LANGFUSE_URL,
                     icon: icons.IconShieldCheck,
                     breadcrumbs: true,
                     external: true,
