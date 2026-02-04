@@ -29,6 +29,7 @@ When adding a new custom migration:
 ## Current Migrations
 
 - **1760000000001-AddPlatformAssetEntity.ts** - Creates the `platform_asset` table for storing platform-level assets like logos, favicons, and other customizable assets
+- **1760000000002-AddChatFlowMetadataEntity.ts** - Creates the `chat_flow_metadata` table for storing metadata about chat flows including who created and updated them. This enables audit tracking for agentflows.
 
 ## Notes
 

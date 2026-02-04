@@ -101,6 +101,18 @@ export const FlowListTable = ({
                   return order === 'asc'
                       ? new Date(a.updatedDate) - new Date(b.updatedDate)
                       : new Date(b.updatedDate) - new Date(a.updatedDate)
+              } else if (orderBy === 'createdBy') {
+                  return order === 'asc'
+                      ? (a.createdBy || '').localeCompare(b.createdBy || '')
+                      : (b.createdBy || '').localeCompare(a.createdBy || '')
+              } else if (orderBy === 'updatedBy') {
+                  return order === 'asc'
+                      ? (a.updatedBy || '').localeCompare(b.updatedBy || '')
+                      : (b.updatedBy || '').localeCompare(a.updatedBy || '')
+              } else if (orderBy === 'createdDate') {
+                  return order === 'asc'
+                      ? new Date(a.createdDate) - new Date(b.createdDate)
+                      : new Date(b.createdDate) - new Date(a.createdDate)
               }
               return 0
           })
@@ -117,18 +129,27 @@ export const FlowListTable = ({
                         }}
                     >
                         <TableRow>
-                            <StyledTableCell component='th' scope='row' style={{ width: '20%' }} key='0'>
+                            <StyledTableCell component='th' scope='row' style={{ width: '15%' }} key='0'>
                                 <TableSortLabel active={orderBy === 'name'} direction={order} onClick={() => handleRequestSort('name')}>
                                     Name
                                 </TableSortLabel>
                             </StyledTableCell>
-                            <StyledTableCell style={{ width: '25%' }} key='1'>
+                            <StyledTableCell style={{ width: '15%' }} key='1'>
                                 Category
                             </StyledTableCell>
-                            <StyledTableCell style={{ width: '30%' }} key='2'>
+                            <StyledTableCell style={{ width: '20%' }} key='2'>
                                 Nodes
                             </StyledTableCell>
-                            <StyledTableCell style={{ width: '15%' }} key='3'>
+                            <StyledTableCell style={{ width: '11%' }} key='3'>
+                                <TableSortLabel
+                                    active={orderBy === 'updatedBy'}
+                                    direction={order}
+                                    onClick={() => handleRequestSort('updatedBy')}
+                                >
+                                    Last Modified By
+                                </TableSortLabel>
+                            </StyledTableCell>
+                            <StyledTableCell style={{ width: '12%' }} key='4'>
                                 <TableSortLabel
                                     active={orderBy === 'updatedDate'}
                                     direction={order}
@@ -137,8 +158,26 @@ export const FlowListTable = ({
                                     Last Modified Date
                                 </TableSortLabel>
                             </StyledTableCell>
+                            <StyledTableCell style={{ width: '11%' }} key='5'>
+                                <TableSortLabel
+                                    active={orderBy === 'createdBy'}
+                                    direction={order}
+                                    onClick={() => handleRequestSort('createdBy')}
+                                >
+                                    Created By
+                                </TableSortLabel>
+                            </StyledTableCell>
+                            <StyledTableCell style={{ width: '12%' }} key='6'>
+                                <TableSortLabel
+                                    active={orderBy === 'createdDate'}
+                                    direction={order}
+                                    onClick={() => handleRequestSort('createdDate')}
+                                >
+                                    Created Date
+                                </TableSortLabel>
+                            </StyledTableCell>
                             {isActionsAvailable && (
-                                <StyledTableCell style={{ width: '10%' }} key='4'>
+                                <StyledTableCell style={{ width: '8%' }} key='7'>
                                     Actions
                                 </StyledTableCell>
                             )}
@@ -160,6 +199,15 @@ export const FlowListTable = ({
                                     <StyledTableCell>
                                         <Skeleton variant='text' />
                                     </StyledTableCell>
+                                    <StyledTableCell>
+                                        <Skeleton variant='text' />
+                                    </StyledTableCell>
+                                    <StyledTableCell>
+                                        <Skeleton variant='text' />
+                                    </StyledTableCell>
+                                    <StyledTableCell>
+                                        <Skeleton variant='text' />
+                                    </StyledTableCell>
                                     {isActionsAvailable && (
                                         <StyledTableCell>
                                             <Skeleton variant='text' />
@@ -167,6 +215,15 @@ export const FlowListTable = ({
                                     )}
                                 </StyledTableRow>
                                 <StyledTableRow>
+                                    <StyledTableCell>
+                                        <Skeleton variant='text' />
+                                    </StyledTableCell>
+                                    <StyledTableCell>
+                                        <Skeleton variant='text' />
+                                    </StyledTableCell>
+                                    <StyledTableCell>
+                                        <Skeleton variant='text' />
+                                    </StyledTableCell>
                                     <StyledTableCell>
                                         <Skeleton variant='text' />
                                     </StyledTableCell>
@@ -317,10 +374,33 @@ export const FlowListTable = ({
                                             )}
                                         </StyledTableCell>
                                         <StyledTableCell key='3'>
+                                            <Typography
+                                                sx={{
+                                                    fontSize: 14,
+                                                    color: row.updatedBy ? 'inherit' : theme.palette.grey[500]
+                                                }}
+                                            >
+                                                {row.updatedBy || '-'}
+                                            </Typography>
+                                        </StyledTableCell>
+                                        <StyledTableCell key='4'>
                                             {moment(row.updatedDate).format('MMMM Do, YYYY HH:mm:ss')}
                                         </StyledTableCell>
+                                        <StyledTableCell key='5'>
+                                            <Typography
+                                                sx={{
+                                                    fontSize: 14,
+                                                    color: row.createdBy ? 'inherit' : theme.palette.grey[500]
+                                                }}
+                                            >
+                                                {row.createdBy || '-'}
+                                            </Typography>
+                                        </StyledTableCell>
+                                        <StyledTableCell key='6'>
+                                            {row.createdDate ? moment(row.createdDate).format('MMMM Do, YYYY HH:mm:ss') : '-'}
+                                        </StyledTableCell>
                                         {isActionsAvailable && (
-                                            <StyledTableCell key='4'>
+                                            <StyledTableCell key='7'>
                                                 <Stack
                                                     direction={{ xs: 'column', sm: 'row' }}
                                                     spacing={1}

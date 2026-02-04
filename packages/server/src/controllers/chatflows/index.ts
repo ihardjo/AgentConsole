@@ -160,7 +160,9 @@ const saveChatflow = async (req: Request, res: Response, next: NextFunction) => 
             orgId,
             workspaceId,
             subscriptionId,
-            getRunningExpressApp().usageCacheManager
+            getRunningExpressApp().usageCacheManager,
+            req.user?.id,
+            req.user?.name
         )
 
         return res.json(apiResponse)
@@ -201,7 +203,15 @@ const updateChatflow = async (req: Request, res: Response, next: NextFunction) =
         const rateLimiterManager = RateLimiterManager.getInstance()
         await rateLimiterManager.updateRateLimiter(updateChatFlow)
 
-        const apiResponse = await chatflowsService.updateChatflow(chatflow, updateChatFlow, orgId, workspaceId, subscriptionId)
+        const apiResponse = await chatflowsService.updateChatflow(
+            chatflow,
+            updateChatFlow,
+            orgId,
+            workspaceId,
+            subscriptionId,
+            req.user?.id,
+            req.user?.name
+        )
         return res.json(apiResponse)
     } catch (error) {
         next(error)
