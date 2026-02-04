@@ -16,10 +16,6 @@ import {
     useTheme,
     Alert,
     TextField,
-    FormControl,
-    InputLabel,
-    Select,
-    MenuItem,
     Typography,
     Chip,
     CircularProgress,
@@ -32,8 +28,7 @@ import {
     Paper,
     IconButton,
     Tooltip,
-    Collapse,
-    OutlinedInput
+    Collapse
 } from '@mui/material'
 
 // project imports
@@ -42,6 +37,7 @@ import ErrorBoundary from '@/ErrorBoundary'
 import ViewHeader from '@/layout/MainLayout/ViewHeader'
 import { StyledTableCell, StyledTableRow } from '@/ui-component/table/TableStyles'
 import { StyledButton } from '@/ui-component/button/StyledButton'
+import { Dropdown } from '@/ui-component/dropdown/Dropdown'
 
 // API
 import useApi from '@/hooks/useApi'
@@ -56,7 +52,8 @@ import {
     IconDeviceFloppy, 
     IconRestore,
     IconTrash,
-    IconAlertTriangle
+    IconAlertTriangle,
+    IconEdit
 } from '@tabler/icons-react'
 
 // components
@@ -75,6 +72,7 @@ const AgentOps = () => {
     const getAllVersionsGroupedApi = useApi(chatflowVersionsApi.getAllVersionsGrouped)
     const getAgentflowsApi = useApi(chatflowVersionsApi.getAgentflowsForVersioning)
     const createVersionApi = useApi(chatflowVersionsApi.createVersion)
+    const updateVersionApi = useApi(chatflowVersionsApi.updateVersion)
     const restoreVersionApi = useApi(chatflowVersionsApi.restoreVersion)
     const deleteVersionApi = useApi(chatflowVersionsApi.deleteVersion)
 
@@ -92,6 +90,7 @@ const AgentOps = () => {
 
     // Dialog states
     const [openSaveVersionDialog, setOpenSaveVersionDialog] = useState(false)
+    const [openEditVersionDialog, setOpenEditVersionDialog] = useState(false)
     const [openRestoreDialog, setOpenRestoreDialog] = useState(false)
     const [openDeleteDialog, setOpenDeleteDialog] = useState(false)
     const [selectedVersion, setSelectedVersion] = useState(null)
@@ -99,6 +98,11 @@ const AgentOps = () => {
     // Save version form state
     const [saveVersionForm, setSaveVersionForm] = useState({
         chatflowId: '',
+        changeDescription: ''
+    })
+
+    // Edit version form state
+    const [editVersionForm, setEditVersionForm] = useState({
         changeDescription: ''
     })
 
@@ -155,12 +159,48 @@ const AgentOps = () => {
         }))
     }
 
+    const handleAgentflowSelect = (value) => {
+        setSaveVersionForm((prev) => ({
+            ...prev,
+            chatflowId: value
+        }))
+    }
+
     const handleConfirmSaveVersion = () => {
         if (saveVersionForm.chatflowId) {
             // Use the unified createVersion endpoint
             // Since flowData is not provided, it will automatically fetch from the chatflow
             createVersionApi.request(saveVersionForm.chatflowId, {
                 changeDescription: saveVersionForm.changeDescription || 'Manual version save'
+            })
+        }
+    }
+
+    // Edit version dialog
+    const handleOpenEditVersion = (version) => {
+        setSelectedVersion(version)
+        setEditVersionForm({
+            changeDescription: version.changeDescription || ''
+        })
+        setOpenEditVersionDialog(true)
+    }
+
+    const handleCloseEditVersion = () => {
+        setOpenEditVersionDialog(false)
+        setEditVersionForm({ changeDescription: '' })
+        setSelectedVersion(null)
+    }
+
+    const handleEditVersionFormChange = (event) => {
+        setEditVersionForm({
+            changeDescription: event.target.value
+        })
+    }
+
+    const handleConfirmEditVersion = () => {
+        if (selectedVersion) {
+            updateVersionApi.request(selectedVersion.id, {
+                changeDescription: editVersionForm.changeDescription || ''
             })
         }
     }
@@ -254,6 +294,14 @@ const AgentOps = () => {
             setSelectedVersion(null)
         }
     }, [restoreVersionApi.data])
+
+    // Refresh after update
+    useEffect(() => {
+        if (updateVersionApi.data !== undefined) {
+            fetchVersions()
+            handleCloseEditVersion()
+        }
+    }, [updateVersionApi.data])
 
     // Refresh after delete
     useEffect(() => {
@@ -456,6 +504,20 @@ const AgentOps = () => {
                                                         </StyledTableCell>
                                                         <StyledTableCell align='right'>
                                                             <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
+                                                                <Tooltip title='Edit description'>
+                                                                    <IconButton
+                                                                        size='small'
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation()
+                                                                            handleOpenEditVersion(version)
+                                                                        }}
+                                                                        sx={{
+                                                                            color: theme.palette.text.primary
+                                                                        }}
+                                                                    >
+                                                                        <IconEdit size={18} />
+                                                                    </IconButton>
+                                                                </Tooltip>
                                                                 <Tooltip title='Restore version'>
                                                                     <IconButton
                                                                         size='small'
@@ -512,46 +574,40 @@ const AgentOps = () => {
                         Create Version
                     </div>
                 </DialogTitle>
-                <DialogContent>
-                    <Box sx={{ p: 2 }}>
-                        <Typography>
-                            Select AI Agent<span style={{ color: 'red' }}>&nbsp;*</span>
-                        </Typography>
-                        <FormControl fullWidth sx={{ mt: 1 }}>
-                            <Select
-                                size='small'
-                                value={saveVersionForm.chatflowId}
-                                onChange={handleSaveVersionFormChange('chatflowId')}
-                            >
-                                {getAgentflowsApi.loading ? (
-                                    <MenuItem disabled>Loading...</MenuItem>
-                                ) : agentflows.length === 0 ? (
-                                    <MenuItem disabled>No AI Agents found</MenuItem>
-                                ) : (
-                                    agentflows.map((flow) => (
-                                        <MenuItem key={flow.id} value={flow.id}>
-                                            {flow.name}
-                                        </MenuItem>
-                                    ))
-                                )}
-                            </Select>
-                        </FormControl>
+                <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <Box>
+                        <div style={{ display: 'flex', flexDirection: 'row' }}>
+                            <Typography>
+                                Select AI Agent<span style={{ color: 'red' }}>&nbsp;*</span>
+                            </Typography>
+                            <div style={{ flexGrow: 1 }}></div>
+                        </div>
+                        <Dropdown
+                            name='chatflowId'
+                            options={agentflows.map((flow) => ({
+                                label: flow.name,
+                                name: flow.id
+                            }))}
+                            onSelect={handleAgentflowSelect}
+                            value={saveVersionForm.chatflowId || 'choose an option'}
+                            loading={getAgentflowsApi.loading}
+                        />
                     </Box>
-                    <Box sx={{ p: 2 }}>
+                    <Box>
                         <Typography>Version Description (optional)</Typography>
-                        <OutlinedInput
+                        <TextField
                             fullWidth
-                            multiline={true}
+                            multiline
                             rows={3}
                             size='small'
                             placeholder='Describe the changes in this version...'
                             value={saveVersionForm.changeDescription}
                             onChange={handleSaveVersionFormChange('changeDescription')}
-                            sx={{ mt: 1 }}
+                            sx={{ mt: 0.5 }}
                         />
                     </Box>
                 </DialogContent>
-                <DialogActions>
+                <DialogActions sx={{ px: 3, pb: 2 }}>
                     <Button onClick={handleCloseSaveVersion}>Cancel</Button>
                     <StyledButton
                         variant='contained'
@@ -559,6 +615,49 @@ const AgentOps = () => {
                         disabled={!saveVersionForm.chatflowId || createVersionApi.loading}
                     >
                         {createVersionApi.loading ? 'Saving...' : 'Save Version'}
+                    </StyledButton>
+                </DialogActions>
+            </Dialog>
+
+            {/* Edit Version Dialog */}
+            <Dialog open={openEditVersionDialog} onClose={handleCloseEditVersion} maxWidth='sm' fullWidth>
+                <DialogTitle style={{ fontSize: '1rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center' }}>
+                        <IconEdit style={{ marginRight: '10px' }} />
+                        Edit Version Description
+                    </div>
+                </DialogTitle>
+                <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <Box>
+                        <Typography>
+                            Version: <strong>v{selectedVersion?.version}</strong>
+                        </Typography>
+                        <Typography variant='body2' color='text.secondary'>
+                            {selectedVersion?.chatFlowName}
+                        </Typography>
+                    </Box>
+                    <Box>
+                        <Typography>Version Description</Typography>
+                        <TextField
+                            fullWidth
+                            multiline
+                            rows={3}
+                            size='small'
+                            placeholder='Describe the changes in this version...'
+                            value={editVersionForm.changeDescription}
+                            onChange={handleEditVersionFormChange}
+                            sx={{ mt: 0.5 }}
+                        />
+                    </Box>
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2 }}>
+                    <Button onClick={handleCloseEditVersion}>Cancel</Button>
+                    <StyledButton
+                        variant='contained'
+                        onClick={handleConfirmEditVersion}
+                        disabled={updateVersionApi.loading}
+                    >
+                        {updateVersionApi.loading ? 'Saving...' : 'Save Changes'}
                     </StyledButton>
                 </DialogActions>
             </Dialog>

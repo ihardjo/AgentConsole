@@ -94,6 +94,26 @@ const restoreVersion = async (req: Request, res: Response, next: NextFunction) =
 }
 
 /**
+ * Update a version's description
+ */
+const updateVersion = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        if (typeof req.params === 'undefined' || !req.params.versionId) {
+            throw new InternalFlowiseError(
+                StatusCodes.PRECONDITION_FAILED,
+                `Error: chatflowVersionController.updateVersion - versionId not provided!`
+            )
+        }
+        const apiResponse = await chatflowVersionService.updateVersion(req.params.versionId, {
+            changeDescription: req.body.changeDescription
+        })
+        return res.json(apiResponse)
+    } catch (error) {
+        next(error)
+    }
+}
+
+/**
  * Delete a version
  */
 const deleteVersion = async (req: Request, res: Response, next: NextFunction) => {
@@ -162,6 +182,7 @@ export default {
     getVersionsByFlowId,
     getVersionById,
     createVersion,
+    updateVersion,
     restoreVersion,
     deleteVersion,
     getAllVersions,

@@ -19,6 +19,9 @@ const getVersionById = (versionId) => client.get(`/chatflow-versions/${versionId
 // If flowData is not provided in body, it will use the current flowData from the chatflow
 const createVersion = (chatflowId, body) => client.post(`/chatflow-versions/chatflow/${chatflowId}`, body)
 
+// Update a version's description
+const updateVersion = (versionId, body) => client.patch(`/chatflow-versions/${versionId}`, body)
+
 // Restore a version (updates the chatflow's flowData directly)
 const restoreVersion = (versionId) => client.post(`/chatflow-versions/${versionId}/restore`)
 
@@ -32,6 +35,7 @@ export default {
     getVersionsByFlowId,
     getVersionById,
     createVersion,
+    updateVersion,
     restoreVersion,
     deleteVersion
 }

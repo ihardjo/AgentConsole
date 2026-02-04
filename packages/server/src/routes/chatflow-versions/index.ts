@@ -30,6 +30,13 @@ router.post(
 // Get a specific version
 router.get('/:versionId', checkAnyPermission('agentflows:view,chatflows:view'), chatflowVersionController.getVersionById)
 
+// Update a version's description
+router.patch(
+    '/:versionId',
+    checkAnyPermission('agentflows:update,chatflows:update'),
+    chatflowVersionController.updateVersion
+)
+
 // Restore a version (updates the chatflow's flowData directly)
 router.post(
     '/:versionId/restore',

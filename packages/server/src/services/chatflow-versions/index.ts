@@ -162,6 +162,34 @@ const restoreVersion = async (versionId: string, userId?: string): Promise<ChatF
 }
 
 /**
+ * Update a version's description
+ */
+const updateVersion = async (versionId: string, data: { changeDescription?: string }): Promise<ChatFlowVersion> => {
+    try {
+        const appServer = getRunningExpressApp()
+        const versionRepo = appServer.AppDataSource.getRepository(ChatFlowVersion)
+
+        const version = await versionRepo.findOne({ where: { id: versionId } })
+
+        if (!version) {
+            throw new InternalFlowiseError(StatusCodes.NOT_FOUND, 'Version not found')
+        }
+
+        version.changeDescription = data.changeDescription || ''
+        const updatedVersion = await versionRepo.save(version)
+        
+        logger.info(`[ChatFlowVersion] Updated version ${version.version} for chatflow ${version.chatFlowId}`)
+        
+        return updatedVersion
+    } catch (error) {
+        throw new InternalFlowiseError(
+            StatusCodes.INTERNAL_SERVER_ERROR,
+            `Error: chatflowVersionService.updateVersion - ${getErrorMessage(error)}`
+        )
+    }
+}
+
+/**
  * Delete a version
  */
 const deleteVersion = async (versionId: string): Promise<void> => {
@@ -341,6 +369,7 @@ export default {
     createVersion,
     getVersionsByFlowId,
     getVersionById,
+    updateVersion,
     restoreVersion,
     deleteVersion,
     getAllVersions,
