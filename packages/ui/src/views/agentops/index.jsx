@@ -320,12 +320,12 @@ const AgentOps = () => {
                                                     key={`flow-${group.chatFlowId}`}
                                                     sx={{
                                                         backgroundColor: customization.isDarkMode 
-                                                            ? theme.palette.common.black
-                                                            : theme.palette.grey[100],
+                                                            ? '#1a1a1a'
+                                                            : theme.palette.grey[300],
                                                         '&:hover': {
                                                             backgroundColor: customization.isDarkMode
-                                                                ? theme.palette.action.hover
-                                                                : theme.palette.grey[200]
+                                                                ? '#252525'
+                                                                : theme.palette.grey[300]
                                                         },
                                                         cursor: 'pointer'
                                                     }}
