@@ -84,6 +84,7 @@ const AgentOps = () => {
     const [groupedVersions, setGroupedVersions] = useState([])
     const [agentflows, setAgentflows] = useState([])
     const [expandedFlows, setExpandedFlows] = useState({})
+    const [search, setSearch] = useState('')
     // Only enable versioning for agentflows (AGENTFLOW). Use 'AI Agents' terminology in the UI.
     const [filters, setFilters] = useState({
         type: 'AGENTFLOW'
@@ -162,6 +163,11 @@ const AgentOps = () => {
                 changeDescription: saveVersionForm.changeDescription || 'Manual version save'
             })
         }
+    }
+
+    // Search handler
+    const onSearchChange = (event) => {
+        setSearch(event.target.value)
     }
 
     // Version actions
@@ -257,6 +263,43 @@ const AgentOps = () => {
         }
     }, [deleteVersionApi.data])
 
+    // Filter grouped versions based on search
+    const filteredGroupedVersions = groupedVersions
+        .map((group) => {
+            // If no search, return all groups
+            if (!search || !search.trim()) {
+                return group
+            }
+
+            const searchLower = search.toLowerCase().trim()
+
+            // Check if group name matches
+            const groupNameMatches = group.chatFlowName.toLowerCase().includes(searchLower)
+
+            // Filter versions within the group based on description
+            const filteredVersions = group.versions.filter((version) => {
+                const descriptionMatches = version.changeDescription
+                    ? version.changeDescription.toLowerCase().includes(searchLower)
+                    : false
+                return descriptionMatches
+            })
+
+            // Include the group if:
+            // 1. Group name matches, OR
+            // 2. At least one version description matches
+            if (groupNameMatches || filteredVersions.length > 0) {
+                return {
+                    ...group,
+                    // If group name matches, show all versions; otherwise show only matching versions
+                    versions: groupNameMatches ? group.versions : filteredVersions,
+                    versionCount: groupNameMatches ? group.versions.length : filteredVersions.length
+                }
+            }
+
+            return null
+        })
+        .filter((group) => group !== null)
+
     return (
         <MainCard>
             {error ? (
@@ -264,6 +307,10 @@ const AgentOps = () => {
             ) : (
                 <Stack flexDirection='column' sx={{ gap: 3 }}>
                     <ViewHeader
+                        onSearchChange={onSearchChange}
+                        search={true}
+                        searchValue={search}
+                        searchPlaceholder='Search Name or Description'
                         title='AI Agents Versions'
                         description='Manage AI Agent versions'
                     >
@@ -281,7 +328,7 @@ const AgentOps = () => {
                         <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
                             <CircularProgress />
                         </Box>
-                    ) : groupedVersions.length === 0 ? (
+                    ) : filteredGroupedVersions.length === 0 ? (
                         <Stack sx={{ alignItems: 'center', justifyContent: 'center' }} flexDirection='column'>
                             <Box sx={{ p: 2, height: 'auto' }}>
                                 <img
@@ -290,8 +337,8 @@ const AgentOps = () => {
                                     alt='No versions'
                                 />
                             </Box>
-                            <div>No versions found</div>
-                            <div>Create a version by clicking "Create Version" above</div>
+                            <div>{search ? 'No versions match your search' : 'No versions found'}</div>
+                            {!search && <div>Create a version by clicking "Create Version" above</div>}
                         </Stack>
                     ) : (
                         <>
@@ -313,7 +360,7 @@ const AgentOps = () => {
                                         </TableRow>
                                     </TableHead>
                                     <TableBody>
-                                        {groupedVersions.map((group, index) => (
+                                        {filteredGroupedVersions.map((group, index) => (
                                             <>
                                                 {/* Agent Flow Row */}
                                                 <StyledTableRow
