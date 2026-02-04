@@ -49,6 +49,7 @@ import variablesRouter from './variables'
 import vectorRouter from './vectors'
 import verifyRouter from './verify'
 import versionRouter from './versions'
+import chatflowVersionRouter from './chatflow-versions'
 import pricingRouter from './pricing'
 import nvidiaNimRouter from './nvidia-nim'
 import executionsRouter from './executions'
@@ -128,6 +129,7 @@ router.use('/variables', variablesRouter)
 router.use('/vector', vectorRouter)
 router.use('/verify', verifyRouter)
 router.use('/version', versionRouter)
+router.use('/chatflow-versions', chatflowVersionRouter)
 router.use('/upsert-history', upsertHistoryRouter)
 router.use('/settings', settingsRouter)
 router.use('/pricing', pricingRouter)
