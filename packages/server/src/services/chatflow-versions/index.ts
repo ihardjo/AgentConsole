@@ -137,7 +137,7 @@ const restoreVersion = async (versionId: string, userId?: string): Promise<ChatF
             await createVersion({
                 chatFlowId: version.chatFlowId,
                 flowData: currentChatflow.flowData,
-                changeDescription: `Backup before restoring to version ${version.version}`,
+                changeDescription: `[AUTOSAVE] Backup before restoring to version ${version.version}`,
                 createdBy: userId
             })
         }

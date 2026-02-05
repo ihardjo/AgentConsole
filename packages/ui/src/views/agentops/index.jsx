@@ -509,7 +509,7 @@ const AgentOps = () => {
                                                                         size='small'
                                                                         onClick={(e) => {
                                                                             e.stopPropagation()
-                                                                            handleOpenEditVersion(version)
+                                                                            handleOpenEditVersion({ ...version, chatFlowName: group.chatFlowName })
                                                                         }}
                                                                         sx={{
                                                                             color: theme.palette.text.primary
@@ -523,7 +523,7 @@ const AgentOps = () => {
                                                                         size='small'
                                                                         onClick={(e) => {
                                                                             e.stopPropagation()
-                                                                            handleRestoreClick && handleRestoreClick(version)
+                                                                            handleRestoreClick && handleRestoreClick({ ...version, chatFlowName: group.chatFlowName })
                                                                         }}
                                                                         sx={{
                                                                             color: theme.palette.text.primary
@@ -537,7 +537,7 @@ const AgentOps = () => {
                                                                         size='small'
                                                                         onClick={(e) => {
                                                                             e.stopPropagation()
-                                                                            handleDeleteClick && handleDeleteClick(version)
+                                                                            handleDeleteClick && handleDeleteClick({ ...version, chatFlowName: group.chatFlowName })
                                                                         }}
                                                                         color='error'
                                                                     >
@@ -667,7 +667,7 @@ const AgentOps = () => {
                 <DialogTitle style={{ fontSize: '1rem' }}>
                     <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center' }}>
                         <IconRestore style={{ marginRight: '10px' }} />
-                        Restore to version v{selectedVersion?.version}
+                        Restore {selectedVersion?.chatFlowName} to version v{selectedVersion?.version}
                     </div>
                 </DialogTitle>
                 <DialogContent sx={{ pt: 2, pb: 1 }}>
@@ -705,7 +705,7 @@ const AgentOps = () => {
                 <DialogTitle style={{ fontSize: '1rem' }}>
                     <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center' }}>
                         <IconTrash style={{ marginRight: '10px' }} />
-                        Delete version v{selectedVersion?.version}
+                        Delete {selectedVersion?.chatFlowName} version v{selectedVersion?.version}
                     </div>
                 </DialogTitle>
                 <DialogContent sx={{ pt: 2, pb: 1 }}>
