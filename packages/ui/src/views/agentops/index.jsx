@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useDispatch, useSelector } from 'react-redux'
+import { enqueueSnackbar as enqueueSnackbarAction, closeSnackbar as closeSnackbarAction } from '@/store/actions'
 import moment from 'moment'
 
 // material-ui
@@ -42,8 +44,10 @@ import { Dropdown } from '@/ui-component/dropdown/Dropdown'
 // API
 import useApi from '@/hooks/useApi'
 import chatflowVersionsApi from '@/api/chatflowVersions'
-import { useSelector } from 'react-redux'
 import { useAuth } from '@/hooks/useAuth'
+
+// utils
+import useNotifier from '@/utils/useNotifier'
 
 // icons
 import version_empty from '@/assets/images/executions_empty.svg'
@@ -54,7 +58,8 @@ import {
     IconRestore,
     IconTrash,
     IconAlertTriangle,
-    IconEdit
+    IconEdit,
+    IconX
 } from '@tabler/icons-react'
 
 // components
@@ -66,9 +71,15 @@ import TablePagination, { DEFAULT_ITEMS_PER_PAGE } from '@/ui-component/paginati
 const AgentOps = () => {
     const theme = useTheme()
     const navigate = useNavigate()
+    const dispatch = useDispatch()
     const customization = useSelector((state) => state.customization)
     const borderColor = theme.palette.grey[900] + 25
     const { hasPermission } = useAuth()
+
+    useNotifier()
+
+    const enqueueSnackbar = (...args) => dispatch(enqueueSnackbarAction(...args))
+    const closeSnackbar = (...args) => dispatch(closeSnackbarAction(...args))
 
     // API hooks
     const getAllVersionsGroupedApi = useApi(chatflowVersionsApi.getAllVersionsGrouped)
@@ -168,13 +179,31 @@ const AgentOps = () => {
         }))
     }
 
-    const handleConfirmSaveVersion = () => {
+    const handleConfirmSaveVersion = async () => {
         if (saveVersionForm.chatflowId) {
-            // Use the unified createVersion endpoint
-            // Since flowData is not provided, it will automatically fetch from the chatflow
-            createVersionApi.request(saveVersionForm.chatflowId, {
-                changeDescription: saveVersionForm.changeDescription || 'Manual version save'
-            })
+            try {
+                // Use the unified createVersion endpoint
+                // Since flowData is not provided, it will automatically fetch from the chatflow
+                await createVersionApi.request(saveVersionForm.chatflowId, {
+                    changeDescription: saveVersionForm.changeDescription || 'Manual version save'
+                })
+            } catch (error) {
+                enqueueSnackbar({
+                    message: `Failed to create version: ${
+                        typeof error.response?.data === 'object' ? error.response.data.message : error.response?.data || error.message
+                    }`,
+                    options: {
+                        key: new Date().getTime() + Math.random(),
+                        variant: 'error',
+                        persist: true,
+                        action: (key) => (
+                            <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
+                                <IconX />
+                            </Button>
+                        )
+                    }
+                })
+            }
         }
     }
 
@@ -199,11 +228,29 @@ const AgentOps = () => {
         })
     }
 
-    const handleConfirmEditVersion = () => {
+    const handleConfirmEditVersion = async () => {
         if (selectedVersion) {
-            updateVersionApi.request(selectedVersion.id, {
-                changeDescription: editVersionForm.changeDescription || ''
-            })
+            try {
+                await updateVersionApi.request(selectedVersion.id, {
+                    changeDescription: editVersionForm.changeDescription || ''
+                })
+            } catch (error) {
+                enqueueSnackbar({
+                    message: `Failed to update version: ${
+                        typeof error.response?.data === 'object' ? error.response.data.message : error.response?.data || error.message
+                    }`,
+                    options: {
+                        key: new Date().getTime() + Math.random(),
+                        variant: 'error',
+                        persist: true,
+                        action: (key) => (
+                            <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
+                                <IconX />
+                            </Button>
+                        )
+                    }
+                })
+            }
         }
     }
 
@@ -223,9 +270,39 @@ const AgentOps = () => {
         setOpenRestoreDialog(true)
     }
 
-    const handleConfirmRestore = () => {
+    const handleConfirmRestore = async () => {
         if (selectedVersion) {
-            restoreVersionApi.request(selectedVersion.id)
+            try {
+                await restoreVersionApi.request(selectedVersion.id)
+                enqueueSnackbar({
+                    message: 'Version restored successfully',
+                    options: {
+                        key: new Date().getTime() + Math.random(),
+                        variant: 'success',
+                        action: (key) => (
+                            <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
+                                <IconX />
+                            </Button>
+                        )
+                    }
+                })
+            } catch (error) {
+                enqueueSnackbar({
+                    message: `Failed to restore version: ${
+                        typeof error.response?.data === 'object' ? error.response.data.message : error.response?.data || error.message
+                    }`,
+                    options: {
+                        key: new Date().getTime() + Math.random(),
+                        variant: 'error',
+                        persist: true,
+                        action: (key) => (
+                            <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
+                                <IconX />
+                            </Button>
+                        )
+                    }
+                })
+            }
         }
         setOpenRestoreDialog(false)
     }
@@ -235,9 +312,39 @@ const AgentOps = () => {
         setOpenDeleteDialog(true)
     }
 
-    const handleConfirmDelete = () => {
+    const handleConfirmDelete = async () => {
         if (selectedVersion) {
-            deleteVersionApi.request(selectedVersion.id)
+            try {
+                await deleteVersionApi.request(selectedVersion.id)
+                enqueueSnackbar({
+                    message: 'Version deleted successfully',
+                    options: {
+                        key: new Date().getTime() + Math.random(),
+                        variant: 'success',
+                        action: (key) => (
+                            <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
+                                <IconX />
+                            </Button>
+                        )
+                    }
+                })
+            } catch (error) {
+                enqueueSnackbar({
+                    message: `Failed to delete version: ${
+                        typeof error.response?.data === 'object' ? error.response.data.message : error.response?.data || error.message
+                    }`,
+                    options: {
+                        key: new Date().getTime() + Math.random(),
+                        variant: 'error',
+                        persist: true,
+                        action: (key) => (
+                            <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
+                                <IconX />
+                            </Button>
+                        )
+                    }
+                })
+            }
         }
         setOpenDeleteDialog(false)
     }
@@ -284,6 +391,18 @@ const AgentOps = () => {
     // Refresh after version creation
     useEffect(() => {
         if (createVersionApi.data) {
+            enqueueSnackbar({
+                message: 'Version created successfully',
+                options: {
+                    key: new Date().getTime() + Math.random(),
+                    variant: 'success',
+                    action: (key) => (
+                        <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
+                            <IconX />
+                        </Button>
+                    )
+                }
+            })
             fetchVersions()
             handleCloseSaveVersion()
         }
@@ -300,6 +419,18 @@ const AgentOps = () => {
     // Refresh after update
     useEffect(() => {
         if (updateVersionApi.data !== undefined) {
+            enqueueSnackbar({
+                message: 'Version updated successfully',
+                options: {
+                    key: new Date().getTime() + Math.random(),
+                    variant: 'success',
+                    action: (key) => (
+                        <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
+                            <IconX />
+                        </Button>
+                    )
+                }
+            })
             fetchVersions()
             handleCloseEditVersion()
         }
