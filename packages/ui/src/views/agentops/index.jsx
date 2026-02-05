@@ -418,7 +418,7 @@ const AgentOps = () => {
 
     // Refresh after update
     useEffect(() => {
-        if (updateVersionApi.data !== undefined) {
+        if (updateVersionApi.data) {
             enqueueSnackbar({
                 message: 'Version updated successfully',
                 options: {
@@ -438,7 +438,7 @@ const AgentOps = () => {
 
     // Refresh after delete
     useEffect(() => {
-        if (deleteVersionApi.data !== undefined) {
+        if (deleteVersionApi.data) {
             fetchVersions()
             setSelectedVersion(null)
         }
@@ -635,7 +635,7 @@ const AgentOps = () => {
                                                         </StyledTableCell>
                                                         <StyledTableCell>{version.createdBy || '-'}</StyledTableCell>
                                                         <StyledTableCell>
-                                                            {version.createdDate ? moment(version.createdDate).format('YYYY-MM-DD HH:mm') : '-'}
+                                                            {version.createdDate ? moment(version.createdDate).format('MMMM Do, YYYY HH:mm:ss') : '-'}
                                                         </StyledTableCell>
                                                         <StyledTableCell align='right'>
                                                             <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
@@ -818,13 +818,16 @@ const AgentOps = () => {
                             backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.2)' : 'rgb(255, 244, 229)',
                             '& .MuiAlert-icon': {
                                 color: theme.palette.mode === 'dark' ? '#ffb74d' : '#ed6c02'
+                            },
+                            '& .MuiAlert-message': {
+                                color: theme.palette.mode === 'dark' ? '#1a1a1a' : 'inherit'
                             }
                         }}
                     >
-                        <Typography variant='body2' sx={{ fontWeight: 500 }}>
+                        <Typography variant='body2' sx={{ fontWeight: 500, color: theme.palette.mode === 'dark' ? '#1a1a1a' : 'inherit' }}>
                             This will replace the current configuration.
                         </Typography>
-                        <Typography variant='body2' sx={{ mt: 0.5 }}>
+                        <Typography variant='body2' sx={{ mt: 0.5, color: theme.palette.mode === 'dark' ? '#1a1a1a' : 'inherit' }}>
                             The current configuration will be backed up automatically before restoring.
                         </Typography>
                     </Alert>
@@ -857,13 +860,16 @@ const AgentOps = () => {
                             backgroundColor: theme.palette.mode === 'dark' ? 'rgba(211, 47, 47, 0.2)' : 'rgb(253, 237, 237)',
                             '& .MuiAlert-icon': {
                                 color: theme.palette.mode === 'dark' ? '#f44336' : '#d32f2f'
+                            },
+                            '& .MuiAlert-message': {
+                                color: theme.palette.mode === 'dark' ? '#1a1a1a' : 'inherit'
                             }
                         }}
                     >
-                        <Typography variant='body2' sx={{ fontWeight: 500 }}>
+                        <Typography variant='body2' sx={{ fontWeight: 500, color: theme.palette.mode === 'dark' ? '#1a1a1a' : 'inherit' }}>
                             This action cannot be undone.
                         </Typography>
-                        <Typography variant='body2' sx={{ mt: 0.5 }}>
+                        <Typography variant='body2' sx={{ mt: 0.5, color: theme.palette.mode === 'dark' ? '#1a1a1a' : 'inherit' }}>
                             This will permanently remove this version from the history.
                         </Typography>
                     </Alert>
