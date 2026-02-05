@@ -43,6 +43,7 @@ import { Dropdown } from '@/ui-component/dropdown/Dropdown'
 import useApi from '@/hooks/useApi'
 import chatflowVersionsApi from '@/api/chatflowVersions'
 import { useSelector } from 'react-redux'
+import { useAuth } from '@/hooks/useAuth'
 
 // icons
 import version_empty from '@/assets/images/executions_empty.svg'
@@ -67,6 +68,7 @@ const AgentOps = () => {
     const navigate = useNavigate()
     const customization = useSelector((state) => state.customization)
     const borderColor = theme.palette.grey[900] + 25
+    const { hasPermission } = useAuth()
 
     // API hooks
     const getAllVersionsGroupedApi = useApi(chatflowVersionsApi.getAllVersionsGrouped)
@@ -362,13 +364,15 @@ const AgentOps = () => {
                         title='AI Agents Versions'
                         description='Manage AI Agent versions'
                     >
-                        <Button
-                            variant='contained'
-                            startIcon={<IconPlus />}
-                            onClick={handleOpenSaveVersion}
-                        >
-                            Create Version
-                        </Button>
+                        {hasPermission('agentops:create') && (
+                            <Button
+                                variant='contained'
+                                startIcon={<IconPlus />}
+                                onClick={handleOpenSaveVersion}
+                            >
+                                Create Version
+                            </Button>
+                        )}
                     </ViewHeader>
 
                     {/* Grouped Version History */}
@@ -504,46 +508,52 @@ const AgentOps = () => {
                                                         </StyledTableCell>
                                                         <StyledTableCell align='right'>
                                                             <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
-                                                                <Tooltip title='Edit description'>
-                                                                    <IconButton
-                                                                        size='small'
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation()
-                                                                            handleOpenEditVersion({ ...version, chatFlowName: group.chatFlowName })
-                                                                        }}
-                                                                        sx={{
-                                                                            color: theme.palette.text.primary
-                                                                        }}
-                                                                    >
-                                                                        <IconEdit size={18} />
-                                                                    </IconButton>
-                                                                </Tooltip>
-                                                                <Tooltip title='Restore version'>
-                                                                    <IconButton
-                                                                        size='small'
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation()
-                                                                            handleRestoreClick && handleRestoreClick({ ...version, chatFlowName: group.chatFlowName })
-                                                                        }}
-                                                                        sx={{
-                                                                            color: theme.palette.text.primary
-                                                                        }}
-                                                                    >
-                                                                        <IconRestore size={18} />
-                                                                    </IconButton>
-                                                                </Tooltip>
-                                                                <Tooltip title='Delete version'>
-                                                                    <IconButton
-                                                                        size='small'
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation()
-                                                                            handleDeleteClick && handleDeleteClick({ ...version, chatFlowName: group.chatFlowName })
-                                                                        }}
-                                                                        color='error'
-                                                                    >
-                                                                        <IconTrash size={18} />
-                                                                    </IconButton>
-                                                                </Tooltip>
+                                                                {hasPermission('agentops:update') && (
+                                                                    <Tooltip title='Edit description'>
+                                                                        <IconButton
+                                                                            size='small'
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation()
+                                                                                handleOpenEditVersion({ ...version, chatFlowName: group.chatFlowName })
+                                                                            }}
+                                                                            sx={{
+                                                                                color: theme.palette.text.primary
+                                                                            }}
+                                                                        >
+                                                                            <IconEdit size={18} />
+                                                                        </IconButton>
+                                                                    </Tooltip>
+                                                                )}
+                                                                {hasPermission('agentops:restore') && (
+                                                                    <Tooltip title='Restore version'>
+                                                                        <IconButton
+                                                                            size='small'
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation()
+                                                                                handleRestoreClick && handleRestoreClick({ ...version, chatFlowName: group.chatFlowName })
+                                                                            }}
+                                                                            sx={{
+                                                                                color: theme.palette.text.primary
+                                                                            }}
+                                                                        >
+                                                                            <IconRestore size={18} />
+                                                                        </IconButton>
+                                                                    </Tooltip>
+                                                                )}
+                                                                {hasPermission('agentops:delete') && (
+                                                                    <Tooltip title='Delete version'>
+                                                                        <IconButton
+                                                                            size='small'
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation()
+                                                                                handleDeleteClick && handleDeleteClick({ ...version, chatFlowName: group.chatFlowName })
+                                                                            }}
+                                                                            color='error'
+                                                                        >
+                                                                            <IconTrash size={18} />
+                                                                        </IconButton>
+                                                                    </Tooltip>
+                                                                )}
                                                             </Box>
                                                         </StyledTableCell>
                                                     </StyledTableRow>
