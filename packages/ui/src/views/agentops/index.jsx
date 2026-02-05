@@ -520,8 +520,7 @@ const AgentOps = () => {
                                     alt='No versions'
                                 />
                             </Box>
-                            <div>{search ? 'No versions match your search' : 'No versions found'}</div>
-                            {!search && <div>Create a version by clicking "Create Version" above</div>}
+                            <div>'No Versions Yet'</div>
                         </Stack>
                     ) : (
                         <>
