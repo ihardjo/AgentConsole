@@ -49,6 +49,14 @@ export class Permissions {
         agentflowsCategory.addPermission(new Permission('agentflows:domains', 'Allowed Domains'))
         this.categories.push(agentflowsCategory)
 
+        const agentopsCategory = new PermissionCategory('agentops')
+        agentopsCategory.addPermission(new Permission('agentops:view', 'View'))
+        agentopsCategory.addPermission(new Permission('agentops:create', 'Create Version'))
+        agentopsCategory.addPermission(new Permission('agentops:update', 'Edit Version'))
+        agentopsCategory.addPermission(new Permission('agentops:restore', 'Restore Version'))
+        agentopsCategory.addPermission(new Permission('agentops:delete', 'Delete Version'))
+        this.categories.push(agentopsCategory)
+
         const toolsCategory = new PermissionCategory('tools')
         toolsCategory.addPermission(new Permission('tools:view', 'View'))
         toolsCategory.addPermission(new Permission('tools:create', 'Create'))

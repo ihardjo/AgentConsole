@@ -5,6 +5,7 @@ import { ChatflowType, IReactFlowObject } from '../../Interface'
 import { FLOWISE_COUNTER_STATUS, FLOWISE_METRIC_COUNTERS } from '../../Interface.Metrics'
 import { UsageCacheManager } from '../../UsageCacheManager'
 import { ChatFlow, EnumChatflowType } from '../../database/entities/ChatFlow'
+import { ChatFlowMetadata } from '../../database/entities/ChatFlowMetadata'
 import { ChatMessage } from '../../database/entities/ChatMessage'
 import { ChatMessageFeedback } from '../../database/entities/ChatMessageFeedback'
 import { UpsertHistory } from '../../database/entities/UpsertHistory'
@@ -144,6 +145,7 @@ const getAllChatflows = async (type?: ChatflowType, workspaceId?: string, page: 
 
         const queryBuilder = appServer.AppDataSource.getRepository(ChatFlow)
             .createQueryBuilder('chat_flow')
+            .leftJoinAndSelect('chat_flow_metadata', 'metadata', 'metadata.chatFlowId = chat_flow.id')
             .orderBy('chat_flow.updatedDate', 'DESC')
 
         if (page > 0 && limit > 0) {
@@ -170,7 +172,18 @@ const getAllChatflows = async (type?: ChatflowType, workspaceId?: string, page: 
             )
         }
         
-        const [data, total] = await queryBuilder.getManyAndCount()
+        const result = await queryBuilder.getRawAndEntities()
+        const total = await queryBuilder.getCount()
+        
+        // Map the raw data to include createdBy and updatedBy from the joined metadata
+        const data = result.entities.map((chatflow: any, index: number) => {
+            const metadata = result.raw[index]
+            return {
+                ...chatflow,
+                createdBy: metadata?.metadata_createdBy || null,
+                updatedBy: metadata?.metadata_updatedBy || null
+            }
+        })
 
         if (page > 0 && limit > 0) {
             return { data, total }
@@ -275,7 +288,9 @@ const saveChatflow = async (
     orgId: string,
     workspaceId: string,
     subscriptionId: string,
-    usageCacheManager: UsageCacheManager
+    usageCacheManager: UsageCacheManager,
+    userId?: string,
+    userName?: string
 ): Promise<any> => {
     validateChatflowType(newChatFlow.type)
     const appServer = getRunningExpressApp()
@@ -307,6 +322,15 @@ const saveChatflow = async (
         dbResponse = await appServer.AppDataSource.getRepository(ChatFlow).save(chatflow)
     }
 
+    // Create metadata entry
+    const createdBy = userName || userId || 'system'
+    const metadata = appServer.AppDataSource.getRepository(ChatFlowMetadata).create({
+        chatFlowId: dbResponse.id,
+        createdBy: createdBy,
+        updatedBy: createdBy
+    })
+    await appServer.AppDataSource.getRepository(ChatFlowMetadata).save(metadata)
+
     const productId = await appServer.identityManager.getProductIdFromSubscription(subscriptionId)
 
     await appServer.telemetry.sendTelemetry(
@@ -334,7 +358,9 @@ const updateChatflow = async (
     updateChatFlow: ChatFlow,
     orgId: string,
     workspaceId: string,
-    subscriptionId: string
+    subscriptionId: string,
+    userId?: string,
+    userName?: string
 ): Promise<any> => {
     const appServer = getRunningExpressApp()
     if (updateChatFlow.flowData && containsBase64File(updateChatFlow)) {
@@ -355,6 +381,25 @@ const updateChatflow = async (
     const newDbChatflow = appServer.AppDataSource.getRepository(ChatFlow).merge(chatflow, updateChatFlow)
     await _checkAndUpdateDocumentStoreUsage(newDbChatflow, chatflow.workspaceId)
     const dbResponse = await appServer.AppDataSource.getRepository(ChatFlow).save(newDbChatflow)
+
+    // Update metadata entry
+    const updatedBy = userName || userId || 'system'
+    const existingMetadata = await appServer.AppDataSource.getRepository(ChatFlowMetadata).findOne({
+        where: { chatFlowId: chatflow.id }
+    })
+
+    if (existingMetadata) {
+        existingMetadata.updatedBy = updatedBy
+        await appServer.AppDataSource.getRepository(ChatFlowMetadata).save(existingMetadata)
+    } else {
+        // If metadata doesn't exist (for older records), create it
+        const metadata = appServer.AppDataSource.getRepository(ChatFlowMetadata).create({
+            chatFlowId: chatflow.id,
+            createdBy: updatedBy,
+            updatedBy: updatedBy
+        })
+        await appServer.AppDataSource.getRepository(ChatFlowMetadata).save(metadata)
+    }
 
     return dbResponse
 }

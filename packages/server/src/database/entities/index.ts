@@ -1,4 +1,6 @@
 import { ChatFlow } from './ChatFlow'
+import { ChatFlowMetadata } from './ChatFlowMetadata'
+import { ChatFlowVersion } from './ChatFlowVersion'
 import { ChatMessage } from './ChatMessage'
 import { ChatMessageFeedback } from './ChatMessageFeedback'
 import { Credential } from './Credential'
@@ -32,6 +34,8 @@ import { PlatformAsset } from '../../custom-rbac/entities/platform-asset.entity'
 
 export const entities = {
     ChatFlow,
+    ChatFlowMetadata,
+    ChatFlowVersion,
     ChatMessage,
     ChatMessageFeedback,
     Credential,
