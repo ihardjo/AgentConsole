@@ -63,10 +63,11 @@ const getRepository = (): Repository<PlatformAsset> => {
 }
 
 /**
- * Get the active configuration including app name and active assets
+ * Get the active configuration including app name, agent evaluation URL, and active assets
  */
 export const getActiveConfig = async (): Promise<{
     applicationName: string
+    agentEvaluationUrl: string
     activeLogo: PlatformAsset | null
     activeFavicon: PlatformAsset | null
 }> => {
@@ -83,6 +84,7 @@ export const getActiveConfig = async (): Promise<{
     
     return {
         applicationName: configManager.get<string>('applicationName') || DEFAULT_APPLICATION_NAME,
+        agentEvaluationUrl: configManager.get<string>('agentEvaluationUrl') || 'https://example.com/agent-evaluation/',
         activeLogo,
         activeFavicon
     }
@@ -103,6 +105,26 @@ export const updateApplicationName = (name: string): void => {
         throw new Error('Application name cannot be empty')
     }
     configManager.set('applicationName', name.trim())
+}
+
+/**
+ * Get Agent Evaluation URL
+ */
+export const getAgentEvaluationUrl = (): string => {
+    return configManager.get<string>('agentEvaluationUrl') || 'https://example.com/agent-evaluation/'
+}
+
+/**
+ * Update Agent Evaluation URL (hot reloadable)
+ */
+export const updateAgentEvaluationUrl = (url: string): void => {
+    if (!url || url.trim().length === 0) {
+        throw new Error('Agent Evaluation URL cannot be empty')
+    }
+    // Ensure URL ends with /
+    const trimmedUrl = url.trim()
+    const normalizedUrl = trimmedUrl.endsWith('/') ? trimmedUrl : `${trimmedUrl}/`
+    configManager.set('agentEvaluationUrl', normalizedUrl)
 }
 
 /**

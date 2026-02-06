@@ -637,6 +637,7 @@ const PlatformConfiguration = () => {
     const getActiveConfigApi = useApi(platformConfigApi.getActiveConfig)
     const listAssetsApi = useApi(platformConfigApi.listAssets)
     const updateAppNameApi = useApi(platformConfigApi.updateApplicationName)
+    const updateAgentEvaluationUrlApi = useApi(platformConfigApi.updateAgentEvaluationUrl)
     const uploadLogoApi = useApi(platformConfigApi.uploadLogo)
     const uploadFaviconApi = useApi(platformConfigApi.uploadFavicon)
     const activateAssetApi = useApi(platformConfigApi.activateAsset)
@@ -647,6 +648,8 @@ const PlatformConfiguration = () => {
     const [tabValue, setTabValue] = useState(0)
     const [applicationName, setApplicationName] = useState('')
     const [originalAppName, setOriginalAppName] = useState('')
+    const [agentEvaluationUrl, setAgentEvaluationUrl] = useState('')
+    const [originalAgentEvaluationUrl, setOriginalAgentEvaluationUrl] = useState('')
     const [assets, setAssets] = useState([])
     const [activeConfig, setActiveConfig] = useState(null)
     const [isLoading, setLoading] = useState(true)
@@ -685,6 +688,8 @@ const PlatformConfiguration = () => {
             setActiveConfig(getActiveConfigApi.data)
             setApplicationName(getActiveConfigApi.data.applicationName || '')
             setOriginalAppName(getActiveConfigApi.data.applicationName || '')
+            setAgentEvaluationUrl(getActiveConfigApi.data.agentEvaluationUrl || '')
+            setOriginalAgentEvaluationUrl(getActiveConfigApi.data.agentEvaluationUrl || '')
         }
     }, [getActiveConfigApi.data])
 
@@ -725,6 +730,34 @@ const PlatformConfiguration = () => {
         } catch (error) {
             enqueueSnackbar({
                 message: error.message || 'Failed to update application name',
+                options: { variant: 'error' }
+            })
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    // Save Agent Evaluation URL
+    const handleSaveAgentEvaluationUrl = async () => {
+        if (!agentEvaluationUrl.trim()) {
+            enqueueSnackbar({
+                message: 'Agent Evaluation URL cannot be empty',
+                options: { variant: 'error' }
+            })
+            return
+        }
+
+        setSaving(true)
+        try {
+            await updateAgentEvaluationUrlApi.request(agentEvaluationUrl)
+            setOriginalAgentEvaluationUrl(agentEvaluationUrl)
+            enqueueSnackbar({
+                message: 'Agent Evaluation URL updated successfully',
+                options: { variant: 'success' }
+            })
+        } catch (error) {
+            enqueueSnackbar({
+                message: error.message || 'Failed to update Agent Evaluation URL',
                 options: { variant: 'error' }
             })
         } finally {
@@ -947,6 +980,7 @@ const PlatformConfiguration = () => {
                                 }}
                             >
                                 <Tab label='Application Name' />
+                                <Tab label='Agent Evaluation URL' />
                                 <Tab label='Logo' />
                                 <Tab label='Favicon' />
                             </Tabs>
@@ -1030,8 +1064,88 @@ const PlatformConfiguration = () => {
                                 </Box>
                             )}
 
-                            {/* Logo Tab */}
+                            {/* Agent Evaluation URL Tab */}
                             {tabValue === 1 && (
+                                <Box>
+                                    <Typography 
+                                        variant='body2' 
+                                        color='text.secondary' 
+                                        sx={{ 
+                                            mb: 2,
+                                            lineHeight: 1.6,
+                                            letterSpacing: '0.01em'
+                                        }}
+                                    >
+                                        Set the Agent Evaluation URL for agent evaluation and monitoring. This will be used to track and analyze your AI agent's performance.
+                                    </Typography>
+                                    <Stack direction='row' spacing={2} alignItems='center'>
+                                        <TextField
+                                            label='Agent Evaluation URL'
+                                            value={agentEvaluationUrl}
+                                            onChange={(e) => setAgentEvaluationUrl(e.target.value)}
+                                            variant='outlined'
+                                            size='small'
+                                            placeholder='https://example.com/agent-evaluation/'
+                                            sx={{ 
+                                                width: 400,
+                                                '& .MuiOutlinedInput-root': {
+                                                    backgroundColor: theme.palette.mode === 'dark' 
+                                                        ? 'rgba(255, 255, 255, 0.05)' 
+                                                        : 'transparent',
+                                                    '&:hover fieldset': {
+                                                        borderColor: theme.palette.primary.main
+                                                    }
+                                                },
+                                                '& .MuiInputLabel-root': {
+                                                    color: theme.palette.mode === 'dark'
+                                                        ? 'rgba(255, 255, 255, 0.7)'
+                                                        : undefined
+                                                }
+                                            }}
+                                        />
+                                        <Button
+                                            variant='contained'
+                                            onClick={handleSaveAgentEvaluationUrl}
+                                            disabled={saving || agentEvaluationUrl === originalAgentEvaluationUrl}
+                                            startIcon={saving ? <CircularProgress size={16} /> : <IconDeviceFloppy size={18} />}
+                                            sx={{
+                                                textTransform: 'none',
+                                                fontWeight: 600,
+                                                letterSpacing: '0.02em',
+                                                boxShadow: theme.shadows[3],
+                                                px: 3,
+                                                '&:hover': {
+                                                    boxShadow: theme.shadows[6]
+                                                },
+                                                '&.Mui-disabled': {
+                                                    backgroundColor: theme.palette.mode === 'dark'
+                                                        ? 'rgba(255, 255, 255, 0.12)'
+                                                        : undefined
+                                                }
+                                            }}
+                                        >
+                                            Save
+                                        </Button>
+                                    </Stack>
+                                    {agentEvaluationUrl !== originalAgentEvaluationUrl && (
+                                        <Alert 
+                                            severity='info' 
+                                            sx={{ 
+                                                mt: 2,
+                                                '& .MuiAlert-message': {
+                                                    fontSize: '0.875rem',
+                                                    letterSpacing: '0.01em'
+                                                }
+                                            }}
+                                        >
+                                            You have unsaved changes. Click Save to apply.
+                                        </Alert>
+                                    )}
+                                </Box>
+                            )}
+
+                            {/* Logo Tab */}
+                            {tabValue === 2 && (
                                 <AssetManager
                                     type='logo'
                                     assets={logoAssets}
@@ -1048,7 +1162,7 @@ const PlatformConfiguration = () => {
                             )}
 
                             {/* Favicon Tab */}
-                            {tabValue === 2 && (
+                            {tabValue === 3 && (
                                 <AssetManager
                                     type='favicon'
                                     assets={faviconAssets}

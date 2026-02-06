@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types'
-import { forwardRef, useEffect } from 'react'
+import { forwardRef, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 
@@ -10,6 +10,7 @@ import { Avatar, Chip, ListItemButton, ListItemIcon, ListItemText, Typography, u
 // project imports
 import { MENU_OPEN, SET_MENU } from '@/store/actions'
 import config from '@/config'
+import platformConfigApi from '@/api/platformConfig'
 
 // assets
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord'
@@ -22,6 +23,22 @@ const NavItem = ({ item, level, navType, onClick, onUploadFile }) => {
     const dispatch = useDispatch()
     const customization = useSelector((state) => state.customization)
     const matchesSM = useMediaQuery(theme.breakpoints.down('lg'))
+    const [dynamicUrl, setDynamicUrl] = useState(item.url)
+
+    // Fetch dynamic URL for items with dynamicUrl flag
+    useEffect(() => {
+        if (item?.dynamicUrl && item?.id === 'agentEvaluation') {
+            platformConfigApi.getAgentEvaluationUrl()
+                .then(response => {
+                    if (response.data?.agentEvaluationUrl) {
+                        setDynamicUrl(response.data.agentEvaluationUrl)
+                    }
+                })
+                .catch(error => {
+                    console.error('Failed to fetch Agent Evaluation URL:', error)
+                })
+        }
+    }, [item])
 
     const Icon = item.icon
     const itemIcon = item?.icon ? (
@@ -47,7 +64,7 @@ const NavItem = ({ item, level, navType, onClick, onUploadFile }) => {
         })
     }
     if (item?.external) {
-        listItemProps = { component: 'a', href: item.url, target: itemTarget }
+        listItemProps = { component: 'a', href: dynamicUrl, target: itemTarget }
     }
     if (item?.id === 'loadChatflow') {
         listItemProps.component = 'label'
