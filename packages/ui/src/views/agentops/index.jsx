@@ -520,7 +520,7 @@ const AgentOps = () => {
                                     alt='No versions'
                                 />
                             </Box>
-                            <div>'No Versions Yet'</div>
+                            <div>No Versions Yet</div>
                         </Stack>
                     ) : (
                         <>
