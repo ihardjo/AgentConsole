@@ -27,6 +27,11 @@ const getActiveFavicon = () => client.get('/platform-configuration/favicon', { r
  */
 const getApplicationName = () => client.get('/platform-configuration/app-name')
 
+/**
+ * Get Agent Evaluation URL
+ */
+const getAgentEvaluationUrl = () => client.get('/platform-configuration/agent-evaluation-url')
+
 // ========================================
 // Protected endpoints (auth required)
 // ========================================
@@ -43,6 +48,13 @@ const getActiveConfig = () => client.get('/platform-configuration')
  */
 const updateApplicationName = (applicationName) =>
     client.put('/platform-configuration/app-name', { applicationName })
+
+/**
+ * Update Agent Evaluation URL
+ * @param {string} agentEvaluationUrl - The new Agent Evaluation URL
+ */
+const updateAgentEvaluationUrl = (agentEvaluationUrl) =>
+    client.put('/platform-configuration/agent-evaluation-url', { agentEvaluationUrl })
 
 /**
  * Reset configuration to defaults
@@ -137,9 +149,11 @@ export default {
     getActiveLogo,
     getActiveFavicon,
     getApplicationName,
+    getAgentEvaluationUrl,
     // Config
     getActiveConfig,
     updateApplicationName,
+    updateAgentEvaluationUrl,
     resetConfig,
     // Asset management
     listAssets,
