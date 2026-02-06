@@ -106,6 +106,44 @@ export const updateApplicationName = async (req: Request, res: Response, next: N
 }
 
 /**
+ * Get Agent Evaluation URL
+ * GET /api/v1/platform-config/agent-evaluation-url
+ */
+export const getAgentEvaluationUrl = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+        const agentEvaluationUrl = platformConfigService.getAgentEvaluationUrl()
+        res.json({ agentEvaluationUrl })
+    } catch (error) {
+        next(error)
+    }
+}
+
+/**
+ * Update Agent Evaluation URL
+ * PUT /api/v1/platform-config/agent-evaluation-url
+ */
+export const updateAgentEvaluationUrl = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+        const { agentEvaluationUrl } = req.body
+        
+        if (!agentEvaluationUrl || typeof agentEvaluationUrl !== 'string') {
+            throw new InternalFlowiseError(
+                StatusCodes.BAD_REQUEST,
+                'Agent Evaluation URL is required and must be a string'
+            )
+        }
+        
+        platformConfigService.updateAgentEvaluationUrl(agentEvaluationUrl)
+        res.json({ 
+            success: true, 
+            agentEvaluationUrl: platformConfigService.getAgentEvaluationUrl() 
+        })
+    } catch (error) {
+        next(error)
+    }
+}
+
+/**
  * Helper function to get file buffer from multer upload
  * Handles both memory storage (buffer available) and disk storage (need to read from path)
  */

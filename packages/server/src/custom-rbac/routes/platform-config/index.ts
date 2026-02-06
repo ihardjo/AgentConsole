@@ -37,6 +37,12 @@ const publicRoutes = [
         path: '/app-name',
         handler: platformConfigController.getApplicationName,
         description: 'Get application name'
+    },
+    {
+        method: 'get' as const,
+        path: '/agent-evaluation-url',
+        handler: platformConfigController.getAgentEvaluationUrl,
+        description: 'Get Agent Evaluation URL'
     }
 ]
 
@@ -71,6 +77,14 @@ registerRoute(router, {
     handler: platformConfigController.updateApplicationName,
     permission: 'platformConfiguration:manage',
     description: 'Update application name'
+})
+
+registerRoute(router, {
+    method: 'put',
+    path: '/agent-evaluation-url',
+    handler: platformConfigController.updateAgentEvaluationUrl,
+    permission: 'platformConfiguration:manage',
+    description: 'Update Agent Evaluation URL'
 })
 
 registerRoute(router, {

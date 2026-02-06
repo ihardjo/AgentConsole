@@ -210,11 +210,12 @@ const dashboard = {
                     id: 'agentEvaluation',
                     title: 'Agent Evaluation',
                     type: 'item',
-                    url: import.meta.env.VITE_LANGFUSE_URL,
+                    url: '/agent-evaluation', // This will be handled by the NavItem component to fetch dynamic URL
                     icon: icons.IconShieldCheck,
                     breadcrumbs: true,
                     external: true,
                     target: true,
+                    dynamicUrl: true, // Flag to indicate URL should be fetched from API
                     alwaysShow: true
                 },
                 {
