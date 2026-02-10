@@ -64,7 +64,6 @@ import organizationRouter from '../enterprise/routes/organization.route'
 import roleRouter from '../enterprise/routes/role.route'
 import organizationUserRoute from '../enterprise/routes/organization-user.route'
 import workspaceRouter from '../enterprise/routes/workspace.route'
-import workspaceUserRouter from '../enterprise/routes/workspace-user.route'
 import accountRouter from '../enterprise/routes/account.route'
 import loginMethodRouter from '../enterprise/routes/login-method.route'
 import { IdentityManager } from '../IdentityManager'
@@ -146,7 +145,7 @@ router.use('/organization', organizationRouter)
 router.use('/role', IdentityManager.checkFeatureByPlan('feat:roles'), roleRouter)
 router.use('/organizationuser', organizationUserRoute)
 router.use('/workspace', workspaceRouter)
-router.use('/workspaceuser', workspaceUserRouter)
+router.use('/workspaceuser', workspaceUserManagementRouter)
 router.use('/account', accountRouter)
 router.use('/loginmethod', loginMethodRouter)
 router.use('/logs', IdentityManager.checkFeatureByPlan('feat:logs'), logsRouter)
