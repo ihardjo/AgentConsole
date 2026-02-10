@@ -65,6 +65,7 @@ import {
 // components
 import VersionHistoryTable from '@/ui-component/table/VersionHistoryTable'
 import TablePagination, { DEFAULT_ITEMS_PER_PAGE } from '@/ui-component/pagination/TablePagination'
+import VersionListMenu from '@/ui-component/button/VersionListMenu'
 
 // ==============================|| AGENT OPS - VERSION HISTORY ||============================== //
 
@@ -637,54 +638,13 @@ const AgentOps = () => {
                                                             {version.createdDate ? moment(version.createdDate).format('MMMM Do, YYYY HH:mm:ss') : '-'}
                                                         </StyledTableCell>
                                                         <StyledTableCell align='right'>
-                                                            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
-                                                                {hasPermission('agentops:update') && (
-                                                                    <Tooltip title='Edit description'>
-                                                                        <IconButton
-                                                                            size='small'
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation()
-                                                                                handleOpenEditVersion({ ...version, chatFlowName: group.chatFlowName })
-                                                                            }}
-                                                                            sx={{
-                                                                                color: theme.palette.text.primary
-                                                                            }}
-                                                                        >
-                                                                            <IconEdit size={18} />
-                                                                        </IconButton>
-                                                                    </Tooltip>
-                                                                )}
-                                                                {hasPermission('agentops:restore') && (
-                                                                    <Tooltip title='Restore version'>
-                                                                        <IconButton
-                                                                            size='small'
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation()
-                                                                                handleRestoreClick && handleRestoreClick({ ...version, chatFlowName: group.chatFlowName })
-                                                                            }}
-                                                                            sx={{
-                                                                                color: theme.palette.text.primary
-                                                                            }}
-                                                                        >
-                                                                            <IconRestore size={18} />
-                                                                        </IconButton>
-                                                                    </Tooltip>
-                                                                )}
-                                                                {hasPermission('agentops:delete') && (
-                                                                    <Tooltip title='Delete version'>
-                                                                        <IconButton
-                                                                            size='small'
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation()
-                                                                                handleDeleteClick && handleDeleteClick({ ...version, chatFlowName: group.chatFlowName })
-                                                                            }}
-                                                                            color='error'
-                                                                        >
-                                                                            <IconTrash size={18} />
-                                                                        </IconButton>
-                                                                    </Tooltip>
-                                                                )}
-                                                            </Box>
+                                                            <VersionListMenu
+                                                                version={version}
+                                                                chatFlowName={group.chatFlowName}
+                                                                onEdit={handleOpenEditVersion}
+                                                                onRestore={handleRestoreClick}
+                                                                onDelete={handleDeleteClick}
+                                                            />
                                                         </StyledTableCell>
                                                     </StyledTableRow>
                                                 ))}
