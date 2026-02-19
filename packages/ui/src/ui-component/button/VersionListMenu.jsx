@@ -8,7 +8,7 @@ import EditIcon from '@mui/icons-material/Edit'
 import Divider from '@mui/material/Divider'
 import Button from '@mui/material/Button'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
-import { IconRestore, IconTrash } from '@tabler/icons-react'
+import { IconRestore, IconTrash, IconArrowsLeftRight } from '@tabler/icons-react'
 
 const StyledMenu = styled((props) => (
     <Menu
@@ -46,7 +46,7 @@ const StyledMenu = styled((props) => (
     }
 }))
 
-export default function VersionListMenu({ version, chatFlowName, onEdit, onRestore, onDelete }) {
+export default function VersionListMenu({ version, chatFlowName, allVersions, onCompare, onEdit, onRestore, onDelete }) {
     const [anchorEl, setAnchorEl] = useState(null)
     const open = Boolean(anchorEl)
 
@@ -60,6 +60,14 @@ export default function VersionListMenu({ version, chatFlowName, onEdit, onResto
             event.stopPropagation()
         }
         setAnchorEl(null)
+    }
+
+    const handleCompare = (event) => {
+        event.stopPropagation()
+        handleClose(event)
+        if (onCompare) {
+            onCompare({ ...version, chatFlowName })
+        }
     }
 
     const handleEdit = (event) => {
@@ -110,6 +118,11 @@ export default function VersionListMenu({ version, chatFlowName, onEdit, onResto
                 open={open}
                 onClose={handleClose}
             >
+                <PermissionMenuItem permissionId='agentops:view' onClick={handleCompare} disableRipple disabled={!allVersions || allVersions.length < 2}>
+                    <IconArrowsLeftRight style={{ fontSize: 18, marginRight: 12 }} />
+                    Compare
+                </PermissionMenuItem>
+                <Divider sx={{ my: 0.5 }} />
                 <PermissionMenuItem permissionId='agentops:update' onClick={handleEdit} disableRipple>
                     <EditIcon style={{ fontSize: 24, marginRight: 12 }} />
                     Edit Description
@@ -131,6 +144,8 @@ export default function VersionListMenu({ version, chatFlowName, onEdit, onResto
 VersionListMenu.propTypes = {
     version: PropTypes.object.isRequired,
     chatFlowName: PropTypes.string.isRequired,
+    allVersions: PropTypes.array,
+    onCompare: PropTypes.func,
     onEdit: PropTypes.func,
     onRestore: PropTypes.func,
     onDelete: PropTypes.func

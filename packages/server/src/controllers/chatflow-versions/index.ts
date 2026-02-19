@@ -3,6 +3,7 @@ import { StatusCodes } from 'http-status-codes'
 import { InternalFlowiseError } from '../../errors/internalFlowiseError'
 import chatflowVersionService from '../../services/chatflow-versions'
 import { getPageAndLimitParams } from '../../utils/pagination'
+import { NodeComparatorFactory } from '../../utils/version-comparison'
 
 /**
  * Get all versions for a specific chatflow
@@ -178,6 +179,65 @@ const getAgentflowsForVersioning = async (req: Request, res: Response, next: Nex
     }
 }
 
+/**
+ * Compare two versions and return semantic analysis
+ */
+const compareVersions = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        if (typeof req.params === 'undefined' || !req.params.versionIdA || !req.params.versionIdB) {
+            throw new InternalFlowiseError(
+                StatusCodes.PRECONDITION_FAILED,
+                `Error: chatflowVersionController.compareVersions - versionIdA and versionIdB not provided!`
+            )
+        }
+
+        const versionIdA = req.params.versionIdA
+        const versionIdB = req.params.versionIdB
+
+        // Fetch both versions
+        const versionA = await chatflowVersionService.getVersionById(versionIdA)
+        const versionB = await chatflowVersionService.getVersionById(versionIdB)
+
+        if (!versionA) {
+            throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Version ${versionIdA} not found`)
+        }
+        if (!versionB) {
+            throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Version ${versionIdB} not found`)
+        }
+
+        // Parse flowData to extract node configurations
+        const flowDataA = typeof versionA.flowData === 'string' ? JSON.parse(versionA.flowData) : versionA.flowData
+        const flowDataB = typeof versionB.flowData === 'string' ? JSON.parse(versionB.flowData) : versionB.flowData
+
+        const nodesA = flowDataA?.nodes || []
+        const nodesB = flowDataB?.nodes || []
+
+        // Compare all nodes between the two versions
+        const comparison = NodeComparatorFactory.compareFlows(nodesA, nodesB)
+
+        // Return comparison with version metadata
+        return res.json({
+            versionA: {
+                id: versionA.id,
+                version: versionA.version,
+                description: versionA.changeDescription,
+                createdDate: versionA.createdDate,
+                createdBy: versionA.createdBy
+            },
+            versionB: {
+                id: versionB.id,
+                version: versionB.version,
+                description: versionB.changeDescription,
+                createdDate: versionB.createdDate,
+                createdBy: versionB.createdBy
+            },
+            comparison
+        })
+    } catch (error) {
+        next(error)
+    }
+}
+
 export default {
     getVersionsByFlowId,
     getVersionById,
@@ -187,5 +247,6 @@ export default {
     deleteVersion,
     getAllVersions,
     getAllVersionsGrouped,
-    getAgentflowsForVersioning
+    getAgentflowsForVersioning,
+    compareVersions
 }

@@ -28,6 +28,9 @@ const restoreVersion = (versionId) => client.post(`/chatflow-versions/${versionI
 // Delete a version
 const deleteVersion = (versionId) => client.delete(`/chatflow-versions/${versionId}`)
 
+// Compare two versions
+const compareVersions = (versionIdA, versionIdB) => client.get(`/chatflow-versions/compare/${versionIdA}/${versionIdB}`)
+
 export default {
     getAllVersions,
     getAllVersionsGrouped,
@@ -37,5 +40,6 @@ export default {
     createVersion,
     updateVersion,
     restoreVersion,
-    deleteVersion
+    deleteVersion,
+    compareVersions
 }
