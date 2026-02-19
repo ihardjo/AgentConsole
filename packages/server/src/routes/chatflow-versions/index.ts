@@ -13,6 +13,9 @@ router.get('/grouped', checkAnyPermission('agentops:view'), chatflowVersionContr
 // Get all agentflows for versioning selection dropdown
 router.get('/agentflows', checkAnyPermission('agentops:view,agentops:create'), chatflowVersionController.getAgentflowsForVersioning)
 
+// Compare two versions (must be before /:versionId to avoid route conflict)
+router.get('/compare/:versionIdA/:versionIdB', checkAnyPermission('agentops:view'), chatflowVersionController.compareVersions)
+
 // Get all versions for a specific chatflow
 router.get(
     '/chatflow/:chatflowId',

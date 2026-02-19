@@ -65,6 +65,8 @@ import {
 // components
 import VersionHistoryTable from '@/ui-component/table/VersionHistoryTable'
 import TablePagination, { DEFAULT_ITEMS_PER_PAGE } from '@/ui-component/pagination/TablePagination'
+import VersionListMenu from '@/ui-component/button/VersionListMenu'
+import CompareVersionsDialog from './CompareVersionsDialog'
 
 // ==============================|| AGENT OPS - VERSION HISTORY ||============================== //
 
@@ -107,6 +109,8 @@ const AgentOps = () => {
     const [openRestoreDialog, setOpenRestoreDialog] = useState(false)
     const [openDeleteDialog, setOpenDeleteDialog] = useState(false)
     const [selectedVersion, setSelectedVersion] = useState(null)
+    const [openVersionSelectorDialog, setOpenVersionSelectorDialog] = useState(false)
+    const [selectedVersionForCompare, setSelectedVersionForCompare] = useState(null)
 
     // Save version form state
     const [saveVersionForm, setSaveVersionForm] = useState({
@@ -234,6 +238,23 @@ const AgentOps = () => {
                 await updateVersionApi.request(selectedVersion.id, {
                     changeDescription: editVersionForm.changeDescription || ''
                 })
+                enqueueSnackbar({
+                    message: 'Version updated successfully',
+                    options: {
+                        key: new Date().getTime() + Math.random(),
+                        variant: 'success',
+                        action: (key) => (
+                            <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
+                                <IconX />
+                            </Button>
+                        )
+                    }
+                })
+                // Refresh the table and close dialog after successful update
+                await fetchVersions()
+                setOpenEditVersionDialog(false)
+                setEditVersionForm({ changeDescription: '' })
+                setSelectedVersion(null)
             } catch (error) {
                 enqueueSnackbar({
                     message: `Failed to update version: ${
@@ -250,6 +271,10 @@ const AgentOps = () => {
                         )
                     }
                 })
+                // Close dialog on error
+                setOpenEditVersionDialog(false)
+                setEditVersionForm({ changeDescription: '' })
+                setSelectedVersion(null)
             }
         }
     }
@@ -286,6 +311,10 @@ const AgentOps = () => {
                         )
                     }
                 })
+                // Refresh the table and close dialog after successful restore
+                await fetchVersions()
+                setOpenRestoreDialog(false)
+                setSelectedVersion(null)
             } catch (error) {
                 enqueueSnackbar({
                     message: `Failed to restore version: ${
@@ -302,9 +331,23 @@ const AgentOps = () => {
                         )
                     }
                 })
+                // Close dialog on error
+                setOpenRestoreDialog(false)
             }
+        } else {
+            setOpenRestoreDialog(false)
         }
-        setOpenRestoreDialog(false)
+    }
+
+    // Compare version handlers
+    const handleCompareClick = (version) => {
+        setSelectedVersionForCompare(version)
+        setOpenVersionSelectorDialog(true)
+    }
+
+    const handleCloseCompareDialog = () => {
+        setOpenVersionSelectorDialog(false)
+        setSelectedVersionForCompare(null)
     }
 
     const handleDeleteClick = (version) => {
@@ -328,6 +371,10 @@ const AgentOps = () => {
                         )
                     }
                 })
+                // Refresh the table and close dialog after successful delete
+                await fetchVersions()
+                setOpenDeleteDialog(false)
+                setSelectedVersion(null)
             } catch (error) {
                 enqueueSnackbar({
                     message: `Failed to delete version: ${
@@ -344,9 +391,12 @@ const AgentOps = () => {
                         )
                     }
                 })
+                // Close dialog on error
+                setOpenDeleteDialog(false)
             }
+        } else {
+            setOpenDeleteDialog(false)
         }
-        setOpenDeleteDialog(false)
     }
 
     // Effects
@@ -406,43 +456,7 @@ const AgentOps = () => {
             fetchVersions()
             handleCloseSaveVersion()
         }
-    }, [createVersionApi.data])
-
-    // Refresh after restore
-    useEffect(() => {
-        if (restoreVersionApi.data) {
-            fetchVersions()
-            setSelectedVersion(null)
-        }
-    }, [restoreVersionApi.data])
-
-    // Refresh after update
-    useEffect(() => {
-        if (updateVersionApi.data) {
-            enqueueSnackbar({
-                message: 'Version updated successfully',
-                options: {
-                    key: new Date().getTime() + Math.random(),
-                    variant: 'success',
-                    action: (key) => (
-                        <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
-                            <IconX />
-                        </Button>
-                    )
-                }
-            })
-            fetchVersions()
-            handleCloseEditVersion()
-        }
-    }, [updateVersionApi.data])
-
-    // Refresh after delete
-    useEffect(() => {
-        if (deleteVersionApi.data) {
-            fetchVersions()
-            setSelectedVersion(null)
-        }
-    }, [deleteVersionApi.data])
+    }, [createVersionApi.data, fetchVersions])
 
     // Filter grouped versions based on search
     const filteredGroupedVersions = groupedVersions
@@ -637,54 +651,15 @@ const AgentOps = () => {
                                                             {version.createdDate ? moment(version.createdDate).format('MMMM Do, YYYY HH:mm:ss') : '-'}
                                                         </StyledTableCell>
                                                         <StyledTableCell align='right'>
-                                                            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
-                                                                {hasPermission('agentops:update') && (
-                                                                    <Tooltip title='Edit description'>
-                                                                        <IconButton
-                                                                            size='small'
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation()
-                                                                                handleOpenEditVersion({ ...version, chatFlowName: group.chatFlowName })
-                                                                            }}
-                                                                            sx={{
-                                                                                color: theme.palette.text.primary
-                                                                            }}
-                                                                        >
-                                                                            <IconEdit size={18} />
-                                                                        </IconButton>
-                                                                    </Tooltip>
-                                                                )}
-                                                                {hasPermission('agentops:restore') && (
-                                                                    <Tooltip title='Restore version'>
-                                                                        <IconButton
-                                                                            size='small'
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation()
-                                                                                handleRestoreClick && handleRestoreClick({ ...version, chatFlowName: group.chatFlowName })
-                                                                            }}
-                                                                            sx={{
-                                                                                color: theme.palette.text.primary
-                                                                            }}
-                                                                        >
-                                                                            <IconRestore size={18} />
-                                                                        </IconButton>
-                                                                    </Tooltip>
-                                                                )}
-                                                                {hasPermission('agentops:delete') && (
-                                                                    <Tooltip title='Delete version'>
-                                                                        <IconButton
-                                                                            size='small'
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation()
-                                                                                handleDeleteClick && handleDeleteClick({ ...version, chatFlowName: group.chatFlowName })
-                                                                            }}
-                                                                            color='error'
-                                                                        >
-                                                                            <IconTrash size={18} />
-                                                                        </IconButton>
-                                                                    </Tooltip>
-                                                                )}
-                                                            </Box>
+                                                            <VersionListMenu
+                                                                version={version}
+                                                                chatFlowName={group.chatFlowName}
+                                                                allVersions={group.versions}
+                                                                onCompare={handleCompareClick}
+                                                                onEdit={handleOpenEditVersion}
+                                                                onRestore={handleRestoreClick}
+                                                                onDelete={handleDeleteClick}
+                                                            />
                                                         </StyledTableCell>
                                                     </StyledTableRow>
                                                 ))}
@@ -884,6 +859,14 @@ const AgentOps = () => {
                     </StyledButton>
                 </DialogActions>
             </Dialog>
+
+            {/* Compare Versions Dialog */}
+            <CompareVersionsDialog
+                open={openVersionSelectorDialog}
+                onClose={handleCloseCompareDialog}
+                selectedVersion={selectedVersionForCompare}
+                versions={selectedVersionForCompare ? groupedVersions.find(g => g.versions.some(v => v.id === selectedVersionForCompare.id))?.versions || [] : []}
+            />
         </MainCard>
     )
 }
