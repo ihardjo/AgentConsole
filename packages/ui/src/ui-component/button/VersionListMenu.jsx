@@ -118,7 +118,7 @@ export default function VersionListMenu({ version, chatFlowName, allVersions, on
                 open={open}
                 onClose={handleClose}
             >
-                <PermissionMenuItem permissionId='agentops:view' onClick={handleCompare} disableRipple disabled={!allVersions || allVersions.length < 2}>
+                <PermissionMenuItem permissionId='agentops:view' onClick={handleCompare} disableRipple disabled={!allVersions || allVersions.length < 1}>
                     <IconArrowsLeftRight style={{ fontSize: 18, marginRight: 12 }} />
                     Compare
                 </PermissionMenuItem>

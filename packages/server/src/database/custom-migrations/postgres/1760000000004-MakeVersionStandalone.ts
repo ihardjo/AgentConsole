@@ -1,0 +1,67 @@
+import { MigrationInterface, QueryRunner } from 'typeorm'
+
+export class MakeVersionStandalone1760000000004 implements MigrationInterface {
+    public async up(queryRunner: QueryRunner): Promise<void> {
+        // 1. Add new columns
+        await queryRunner.query(
+            `ALTER TABLE chat_flow_version ADD COLUMN IF NOT EXISTS "chatFlowName" varchar(255);`
+        )
+        await queryRunner.query(
+            `ALTER TABLE chat_flow_version ADD COLUMN IF NOT EXISTS "chatFlowType" varchar(50);`
+        )
+
+        // 2. Back-fill chatFlowName and chatFlowType from the parent chatflow
+        await queryRunner.query(
+            `UPDATE chat_flow_version v
+             SET "chatFlowName" = cf.name,
+                 "chatFlowType" = cf.type
+             FROM chat_flow cf
+             WHERE cf.id = v."chatFlowId";`
+        )
+
+        // 3. Make chatFlowId nullable
+        await queryRunner.query(
+            `ALTER TABLE chat_flow_version ALTER COLUMN "chatFlowId" DROP NOT NULL;`
+        )
+
+        // 4. Drop the CASCADE foreign key and recreate with SET NULL
+        await queryRunner.query(
+            `ALTER TABLE chat_flow_version DROP CONSTRAINT IF EXISTS "FK_chat_flow_version_chatFlowId";`
+        )
+        await queryRunner.query(
+            `ALTER TABLE chat_flow_version
+             ADD CONSTRAINT "FK_chat_flow_version_chatFlowId"
+             FOREIGN KEY ("chatFlowId") REFERENCES chat_flow(id) ON DELETE SET NULL;`
+        )
+    }
+
+    public async down(queryRunner: QueryRunner): Promise<void> {
+        // Delete orphaned versions (those with NULL chatFlowId)
+        await queryRunner.query(
+            `DELETE FROM chat_flow_version WHERE "chatFlowId" IS NULL;`
+        )
+
+        // Restore CASCADE foreign key
+        await queryRunner.query(
+            `ALTER TABLE chat_flow_version DROP CONSTRAINT IF EXISTS "FK_chat_flow_version_chatFlowId";`
+        )
+        await queryRunner.query(
+            `ALTER TABLE chat_flow_version
+             ADD CONSTRAINT "FK_chat_flow_version_chatFlowId"
+             FOREIGN KEY ("chatFlowId") REFERENCES chat_flow(id) ON DELETE CASCADE;`
+        )
+
+        // Make chatFlowId NOT NULL again
+        await queryRunner.query(
+            `ALTER TABLE chat_flow_version ALTER COLUMN "chatFlowId" SET NOT NULL;`
+        )
+
+        // Drop the new columns
+        await queryRunner.query(
+            `ALTER TABLE chat_flow_version DROP COLUMN IF EXISTS "chatFlowType";`
+        )
+        await queryRunner.query(
+            `ALTER TABLE chat_flow_version DROP COLUMN IF EXISTS "chatFlowName";`
+        )
+    }
+}

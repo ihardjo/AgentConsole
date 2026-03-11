@@ -35,6 +35,7 @@ import { Organization } from './custom-rbac/entities/organization.entity'
 import { GeneralRole, Role } from './custom-rbac/entities/role.entity'
 import { migrateApiKeysFromJsonToDb } from './utils/apiKey'
 import { ExpressAdapter } from '@bull-board/express'
+import { initGitSync } from './services/git-sync'
 
 declare global {
     namespace Express {
@@ -149,6 +150,13 @@ export class App {
 
             // TODO: Remove this by end of 2025
             await migrateApiKeysFromJsonToDb(this.AppDataSource, this.identityManager.getPlatformType())
+
+            // Initialize Git Sync for Agent Ops
+            try {
+                await initGitSync()
+            } catch (gitError) {
+                logger.warn(`⚠️ [server]: Git sync initialization failed (non-fatal): ${gitError}`)
+            }
 
             logger.info('🎉 [server]: All initialization steps completed successfully!')
         } catch (error) {
