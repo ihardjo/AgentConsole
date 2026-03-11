@@ -1,5 +1,6 @@
 import PropTypes from 'prop-types'
 import { useState, useEffect, useCallback } from 'react'
+import { useSelector } from 'react-redux'
 import {
     Dialog,
     DialogTitle,
@@ -10,7 +11,6 @@ import {
     Box,
     Chip,
     CircularProgress,
-    Alert,
     FormControl,
     Select,
     MenuItem,
@@ -27,7 +27,8 @@ import {
     IconCirclePlus,
     IconCircleMinus,
     IconArrowsExchange,
-    IconBox
+    IconBox,
+    IconAlertTriangle
 } from '@tabler/icons-react'
 import chatflowVersionsApi from '@/api/chatflowVersions'
 import { AGENTFLOW_ICONS } from '@/store/constant'
@@ -373,15 +374,19 @@ NodeGroup.propTypes = {
 
 // ================================|| MAIN DIALOG ||================================ //
 
+/** Sentinel value used in both dropdowns to represent the live active version. */
+const ACTIVE_FLOW_ID = '__active__'
+
 /**
  * Unified Compare Versions Dialog
  *
- * - Side-by-side version selector at the top
+ * - Side-by-side version selector at the top (includes "Active Version" option)
  * - Multi-node comparison grouped by node (id + name)
  * - Shows added, removed, modified, and unchanged nodes
  */
-const CompareVersionsDialog = ({ open, onClose, selectedVersion, versions }) => {
+const CompareVersionsDialog = ({ open, onClose, selectedVersion, versions, activeFlowChatflowId }) => {
     const theme = useTheme()
+    const customization = useSelector((state) => state.customization)
     const [versionAId, setVersionAId] = useState('')
     const [compareWithVersionId, setCompareWithVersionId] = useState('')
     const [loading, setLoading] = useState(false)
@@ -389,6 +394,7 @@ const CompareVersionsDialog = ({ open, onClose, selectedVersion, versions }) => 
     const [comparisonData, setComparisonData] = useState(null)
 
     const allVersions = versions || []
+    // Exclude the other selection from each dropdown (but never exclude the active-flow sentinel)
     const availableVersionsForA = allVersions.filter((v) => v.id !== compareWithVersionId)
     const availableVersionsForB = allVersions.filter((v) => v.id !== versionAId)
     const hasComparison = !!comparisonData
@@ -417,6 +423,11 @@ const CompareVersionsDialog = ({ open, onClose, selectedVersion, versions }) => 
         }
     }, [open])
 
+    /**
+     * Fetch the comparison result.
+     * If either side is the active-flow sentinel, call compareVersionWithActive;
+     * otherwise call compareVersions as before.
+     */
     const fetchComparison = useCallback(
         async (versionA, versionB) => {
             if (!versionA || !versionB) return
@@ -426,15 +437,28 @@ const CompareVersionsDialog = ({ open, onClose, selectedVersion, versions }) => 
             setComparisonData(null)
 
             try {
-                const response = await chatflowVersionsApi.compareVersions(versionA, versionB)
-                setComparisonData(response.data)
+                let response
+                if (versionA === ACTIVE_FLOW_ID) {
+                    // Active version is side A — compare active (B side on server) vs version (A side on server),
+                    // then swap the returned metadata so A stays on the left visually.
+                    response = await chatflowVersionsApi.compareVersionWithActive(versionB, activeFlowChatflowId)
+                    // Swap versionA/versionB in the response so Active appears on the left
+                    const { versionA: srvA, versionB: srvB, comparison } = response.data
+                    setComparisonData({ versionA: srvB, versionB: srvA, comparison })
+                } else if (versionB === ACTIVE_FLOW_ID) {
+                    response = await chatflowVersionsApi.compareVersionWithActive(versionA, activeFlowChatflowId)
+                    setComparisonData(response.data)
+                } else {
+                    response = await chatflowVersionsApi.compareVersions(versionA, versionB)
+                    setComparisonData(response.data)
+                }
             } catch (err) {
                 setError(err?.response?.data?.message || 'Failed to compare versions')
             } finally {
                 setLoading(false)
             }
         },
-        []
+        [activeFlowChatflowId]
     )
 
     const handleVersionASelect = (e) => {
@@ -458,6 +482,32 @@ const CompareVersionsDialog = ({ open, onClose, selectedVersion, versions }) => 
             setComparisonData(null)
         }
     }
+
+    /** Render a single version option inside a Select MenuItem */
+    const VersionMenuItem = ({ version }) => (
+        <Box>
+            <Typography variant='body2' sx={{ fontWeight: 600 }}>
+                v{version.version}
+            </Typography>
+            <Typography variant='caption' color='text.secondary' sx={{ display: 'block' }}>
+                {version.changeDescription || 'No description'} • {moment(version.createdDate).format('MMM DD, YY')}
+            </Typography>
+        </Box>
+    )
+
+    VersionMenuItem.propTypes = { version: PropTypes.object.isRequired }
+
+    /** Render the active-flow option */
+    const ActiveFlowMenuItem = () => (
+        <Box>
+            <Typography variant='body2' sx={{ fontWeight: 600 }}>
+                Active Version
+            </Typography>
+            <Typography variant='caption' color='text.secondary' sx={{ display: 'block' }}>
+                Current unsaved state of the flow
+            </Typography>
+        </Box>
+    )
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth='lg' fullWidth>
@@ -492,16 +542,15 @@ const CompareVersionsDialog = ({ open, onClose, selectedVersion, versions }) => 
                                         Select base version…
                                     </Typography>
                                 </MenuItem>
+                                {/* Active version option — only show when the other side is not already active */}
+                                {activeFlowChatflowId && compareWithVersionId !== ACTIVE_FLOW_ID && (
+                                    <MenuItem value={ACTIVE_FLOW_ID}>
+                                        <ActiveFlowMenuItem />
+                                    </MenuItem>
+                                )}
                                 {availableVersionsForA.map((version) => (
                                     <MenuItem key={version.id} value={version.id}>
-                                        <Box>
-                                            <Typography variant='body2' sx={{ fontWeight: 600 }}>
-                                                v{version.version}
-                                            </Typography>
-                                            <Typography variant='caption' color='text.secondary' sx={{ display: 'block' }}>
-                                                {version.changeDescription || 'No description'} • {moment(version.createdDate).format('MMM DD, YY')}
-                                            </Typography>
-                                        </Box>
+                                        <VersionMenuItem version={version} />
                                     </MenuItem>
                                 ))}
                             </Select>
@@ -529,16 +578,15 @@ const CompareVersionsDialog = ({ open, onClose, selectedVersion, versions }) => 
                                         Select a version to compare…
                                     </Typography>
                                 </MenuItem>
+                                {/* Active version option — only show when the other side is not already active */}
+                                {activeFlowChatflowId && versionAId !== ACTIVE_FLOW_ID && (
+                                    <MenuItem value={ACTIVE_FLOW_ID}>
+                                        <ActiveFlowMenuItem />
+                                    </MenuItem>
+                                )}
                                 {availableVersionsForB.map((version) => (
                                     <MenuItem key={version.id} value={version.id}>
-                                        <Box>
-                                            <Typography variant='body2' sx={{ fontWeight: 600 }}>
-                                                v{version.version}
-                                            </Typography>
-                                            <Typography variant='caption' color='text.secondary' sx={{ display: 'block' }}>
-                                                {version.changeDescription || 'No description'} • {moment(version.createdDate).format('MMM DD, YY')}
-                                            </Typography>
-                                        </Box>
+                                        <VersionMenuItem version={version} />
                                     </MenuItem>
                                 ))}
                             </Select>
@@ -558,9 +606,28 @@ const CompareVersionsDialog = ({ open, onClose, selectedVersion, versions }) => 
                         </Typography>
                     </Box>
                 ) : error ? (
-                    <Alert severity='error' sx={{ mb: 2 }}>
-                        {error}
-                    </Alert>
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: 1.5,
+                            p: 2,
+                            mb: 2,
+                            borderRadius: 2,
+                            border: `1px solid ${customization.isDarkMode ? 'rgba(244, 67, 54, 0.3)' : 'rgba(211, 47, 47, 0.2)'}`,
+                            background: customization.isDarkMode
+                                ? 'linear-gradient(135deg, rgba(244, 67, 54, 0.12) 0%, rgba(211, 47, 47, 0.08) 100%)'
+                                : 'linear-gradient(135deg, rgba(253, 237, 237, 1) 0%, rgba(255, 220, 220, 0.6) 100%)'
+                        }}
+                    >
+                        <IconAlertTriangle
+                            size={18}
+                            style={{ color: customization.isDarkMode ? theme.palette.error.light : theme.palette.error.dark, flexShrink: 0, marginTop: 2 }}
+                        />
+                        <Typography variant='body2' sx={{ color: customization.isDarkMode ? theme.palette.text.primary : theme.palette.error.dark }}>
+                            {error}
+                        </Typography>
+                    </Box>
                 ) : hasComparison ? (
                     <Box>
                         {/* ── Flow-level summary ── */}
@@ -712,7 +779,10 @@ CompareVersionsDialog.propTypes = {
     open: PropTypes.bool.isRequired,
     onClose: PropTypes.func.isRequired,
     selectedVersion: PropTypes.object,
-    versions: PropTypes.array
+    versions: PropTypes.array,
+    /** The chatflowId of the flow whose versions are being compared.
+     *  When provided, both dropdowns will include an "Active Version" option. */
+    activeFlowChatflowId: PropTypes.string
 }
 
 export default CompareVersionsDialog

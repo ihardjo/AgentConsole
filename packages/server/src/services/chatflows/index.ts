@@ -6,6 +6,7 @@ import { FLOWISE_COUNTER_STATUS, FLOWISE_METRIC_COUNTERS } from '../../Interface
 import { UsageCacheManager } from '../../UsageCacheManager'
 import { ChatFlow, EnumChatflowType } from '../../database/entities/ChatFlow'
 import { ChatFlowMetadata } from '../../database/entities/ChatFlowMetadata'
+import { ChatFlowVersion } from '../../database/entities/ChatFlowVersion'
 import { ChatMessage } from '../../database/entities/ChatMessage'
 import { ChatMessageFeedback } from '../../database/entities/ChatMessageFeedback'
 import { UpsertHistory } from '../../database/entities/UpsertHistory'
@@ -107,7 +108,29 @@ const deleteChatflow = async (chatflowId: string, orgId: string, workspaceId: st
     try {
         const appServer = getRunningExpressApp()
 
-        await getChatflowById(chatflowId, workspaceId)
+        const chatflow = await getChatflowById(chatflowId, workspaceId)
+
+        // ── Preserve version history before deleting the parent flow ──────────
+        // Stamp chatFlowName and chatFlowType onto every related version so they
+        // remain self-describing after the ChatFlow row is gone.  chatFlowId is
+        // intentionally kept as-is (not nulled) so restore can recreate the flow
+        // at the exact same UUID.
+        try {
+            const versionRepo = appServer.AppDataSource.getRepository(ChatFlowVersion)
+            await versionRepo
+                .createQueryBuilder()
+                .update(ChatFlowVersion)
+                .set({
+                    chatFlowName: chatflow.name,
+                    chatFlowType: chatflow.type
+                })
+                .where('chatFlowId = :chatFlowId', { chatFlowId: chatflowId })
+                .execute()
+            logger.info(`[ChatFlow] Stamped name/type onto versions for chatflow ${chatflowId} before deletion`)
+        } catch (stampError) {
+            // Non-fatal — the chatflow can still be deleted even if stamping fails
+            logger.warn(`[ChatFlow] Failed to stamp version metadata before delete: ${stampError}`)
+        }
 
         const dbResponse = await appServer.AppDataSource.getRepository(ChatFlow).delete({ id: chatflowId })
 

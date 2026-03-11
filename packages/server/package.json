@@ -141,6 +141,7 @@
         "reflect-metadata": "^0.1.13",
         "s3-streamlogger": "^1.11.0",
         "sanitize-html": "^2.11.0",
+        "simple-git": "^3.32.3",
         "sqlite3": "^5.1.6",
         "stripe": "^15.6.0",
         "turndown": "^7.2.0",

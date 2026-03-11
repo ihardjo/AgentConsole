@@ -31,6 +31,9 @@ const deleteVersion = (versionId) => client.delete(`/chatflow-versions/${version
 // Compare two versions
 const compareVersions = (versionIdA, versionIdB) => client.get(`/chatflow-versions/compare/${versionIdA}/${versionIdB}`)
 
+// Compare a saved version against the live active flow of its chatflow
+const compareVersionWithActive = (versionId, chatflowId) => client.get(`/chatflow-versions/compare/${versionId}/active/${chatflowId}`)
+
 export default {
     getAllVersions,
     getAllVersionsGrouped,
@@ -41,5 +44,6 @@ export default {
     updateVersion,
     restoreVersion,
     deleteVersion,
-    compareVersions
+    compareVersions,
+    compareVersionWithActive
 }

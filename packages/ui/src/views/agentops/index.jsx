@@ -9,28 +9,24 @@ import {
     Box,
     Stack,
     Button,
-    Grid,
     Dialog,
     DialogActions,
     DialogContent,
-    DialogContentText,
     DialogTitle,
     useTheme,
-    Alert,
     TextField,
     Typography,
     Chip,
     CircularProgress,
     Table,
     TableBody,
-    TableCell,
     TableContainer,
     TableHead,
     TableRow,
     Paper,
     IconButton,
     Tooltip,
-    Collapse
+    Badge
 } from '@mui/material'
 
 // project imports
@@ -39,11 +35,13 @@ import ErrorBoundary from '@/ErrorBoundary'
 import ViewHeader from '@/layout/MainLayout/ViewHeader'
 import { StyledTableCell, StyledTableRow } from '@/ui-component/table/TableStyles'
 import { StyledButton } from '@/ui-component/button/StyledButton'
+import { StyledPermissionButton } from '@/ui-component/button/RBACButtons'
 import { Dropdown } from '@/ui-component/dropdown/Dropdown'
 
 // API
 import useApi from '@/hooks/useApi'
 import chatflowVersionsApi from '@/api/chatflowVersions'
+import gitSyncApi from '@/api/gitSync'
 import { useAuth } from '@/hooks/useAuth'
 
 // utils
@@ -59,14 +57,15 @@ import {
     IconTrash,
     IconAlertTriangle,
     IconEdit,
-    IconX
+    IconX,
+    IconGitBranch
 } from '@tabler/icons-react'
 
 // components
-import VersionHistoryTable from '@/ui-component/table/VersionHistoryTable'
 import TablePagination, { DEFAULT_ITEMS_PER_PAGE } from '@/ui-component/pagination/TablePagination'
 import VersionListMenu from '@/ui-component/button/VersionListMenu'
 import CompareVersionsDialog from './CompareVersionsDialog'
+import GitSyncPanel from './GitSyncPanel'
 
 // ==============================|| AGENT OPS - VERSION HISTORY ||============================== //
 
@@ -103,12 +102,17 @@ const AgentOps = () => {
         type: 'AGENTFLOW'
     })
 
+    // Git Sync dialog
+    const [openGitSyncDialog, setOpenGitSyncDialog] = useState(false)
+    const getGitSyncStatusApi = useApi(gitSyncApi.getStatus)
+
     // Dialog states
     const [openSaveVersionDialog, setOpenSaveVersionDialog] = useState(false)
     const [openEditVersionDialog, setOpenEditVersionDialog] = useState(false)
     const [openRestoreDialog, setOpenRestoreDialog] = useState(false)
     const [openDeleteDialog, setOpenDeleteDialog] = useState(false)
     const [selectedVersion, setSelectedVersion] = useState(null)
+    const [restoreHasUnsavedChanges, setRestoreHasUnsavedChanges] = useState(false)
     const [openVersionSelectorDialog, setOpenVersionSelectorDialog] = useState(false)
     const [selectedVersionForCompare, setSelectedVersionForCompare] = useState(null)
 
@@ -292,6 +296,10 @@ const AgentOps = () => {
 
     const handleRestoreClick = (version) => {
         setSelectedVersion(version)
+        // Detect whether the group this version belongs to has unsaved changes —
+        // i.e. the live agentflow flowData doesn't match any saved version.
+        const group = groupedVersions.find((g) => g.chatFlowId === version.chatFlowId)
+        setRestoreHasUnsavedChanges(!group?.isDeleted && !!group?.hasUnsavedChanges)
         setOpenRestoreDialog(true)
     }
 
@@ -315,6 +323,9 @@ const AgentOps = () => {
                 await fetchVersions()
                 setOpenRestoreDialog(false)
                 setSelectedVersion(null)
+                setRestoreHasUnsavedChanges(false)
+                // Refresh git sync status so the badge updates (new commit → out of sync)
+                getGitSyncStatusApi.request()
             } catch (error) {
                 enqueueSnackbar({
                     message: `Failed to restore version: ${
@@ -333,9 +344,11 @@ const AgentOps = () => {
                 })
                 // Close dialog on error
                 setOpenRestoreDialog(false)
+                setRestoreHasUnsavedChanges(false)
             }
         } else {
             setOpenRestoreDialog(false)
+            setRestoreHasUnsavedChanges(false)
         }
     }
 
@@ -375,6 +388,8 @@ const AgentOps = () => {
                 await fetchVersions()
                 setOpenDeleteDialog(false)
                 setSelectedVersion(null)
+                // Refresh git sync status so the badge updates (new commit → out of sync)
+                getGitSyncStatusApi.request()
             } catch (error) {
                 enqueueSnackbar({
                     message: `Failed to delete version: ${
@@ -402,6 +417,7 @@ const AgentOps = () => {
     // Effects
     useEffect(() => {
         fetchVersions()
+        getGitSyncStatusApi.request()
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentPage, pageLimit, filters.type])
 
@@ -455,6 +471,8 @@ const AgentOps = () => {
             })
             fetchVersions()
             handleCloseSaveVersion()
+            // Refresh git sync status so the badge updates (new commit → out of sync)
+            getGitSyncStatusApi.request()
         }
     }, [createVersionApi.data, fetchVersions])
 
@@ -495,12 +513,102 @@ const AgentOps = () => {
         })
         .filter((group) => group !== null)
 
+    // Derive git sync status for the header button indicator
+    // States: 'error' | 'conflicts' | 'out-of-sync' | 'active' | 'inactive'
+    const gitSyncStatus = getGitSyncStatusApi.data
+    const gitSyncLastError = gitSyncStatus?.lastError || null
+    const gitSyncLastSyncAt = gitSyncStatus?.lastSyncAt || null
+    const isGitSyncFullyActive = gitSyncStatus?.enabled === true && gitSyncStatus?.initialized === true && gitSyncStatus?.hasRemote === true
+    const hasConflicts = isGitSyncFullyActive && Array.isArray(gitSyncStatus?.conflicted) && gitSyncStatus.conflicted.length > 0
+
+    const gitSyncState = gitSyncLastError
+        ? 'error'
+        : hasConflicts
+            ? 'conflicts'
+            : isGitSyncFullyActive && gitSyncStatus?.outOfSync === true
+                ? 'out-of-sync'
+                : isGitSyncFullyActive
+                    ? 'active'
+                    : 'inactive'
+
+    const gitSyncStateColor = customization.isDarkMode
+        ? {
+              error:         theme.palette.error.main,
+              conflicts:     theme.palette.error.main,
+              'out-of-sync': theme.palette.warning.main,
+              active:        theme.palette.success.main,
+              inactive:      theme.palette.text.secondary
+          }[gitSyncState]
+        : {
+              error:         theme.palette.error.dark,
+              conflicts:     theme.palette.error.dark,
+              'out-of-sync': theme.palette.warning.dark,
+              active:        theme.palette.success.dark,
+              inactive:      theme.palette.text.secondary
+          }[gitSyncState]
+
+    const gitSyncStateColorDark = customization.isDarkMode
+        ? {
+              error:         theme.palette.error.dark,
+              conflicts:     theme.palette.error.dark,
+              'out-of-sync': theme.palette.warning.dark,
+              active:        theme.palette.success.dark,
+              inactive:      theme.palette.text.secondary
+          }[gitSyncState]
+        : {
+              error:         theme.palette.error.main,
+              conflicts:     theme.palette.error.main,
+              'out-of-sync': theme.palette.warning.main,
+              active:        theme.palette.success.main,
+              inactive:      theme.palette.text.secondary
+          }[gitSyncState]
+
+    const gitSyncTooltip = {
+        error:        `Git Sync Error: ${gitSyncLastError}`,
+        conflicts:    `Git Sync: ${gitSyncStatus?.conflicted?.length ?? 0} unresolved conflict(s) — open Git Sync panel`,
+        'out-of-sync': 'Git Sync: Local and remote are out of sync',
+        active:       'Git Sync is active',
+        inactive:     'Git Sync is inactive'
+    }[gitSyncState]
+
+    const gitSyncButtonLabel = gitSyncLastSyncAt
+        ? `Git Sync · ${moment(gitSyncLastSyncAt).fromNow()}`
+        : 'Git Sync'
+
+    // Derive a short human-readable repo name from the remote URL.
+    // Strips the protocol, host, trailing .git, and returns "owner/repo".
+    // Falls back to the raw URL if parsing fails, or null when not configured.
+    const gitSyncRepoName = (() => {
+        const url = gitSyncStatus?.remoteUrl
+        if (!url) return null
+        try {
+            // Handles https://github.com/owner/repo.git and git@github.com:owner/repo.git
+            const cleaned = url.replace(/\.git$/, '')
+            const httpsMatch = cleaned.match(/https?:\/\/[^/]+\/(.+)/)
+            if (httpsMatch) return httpsMatch[1]
+            const sshMatch = cleaned.match(/[^:]+:(.+)/)
+            if (sshMatch) return sshMatch[1]
+            return cleaned
+        } catch {
+            return url
+        }
+    })()
+
+    const gitSyncChipLabel = {
+        error:        'Error',
+        conflicts:    'Conflicts',
+        'out-of-sync': 'Out of Sync',
+        active:       'Active',
+        inactive:     'Inactive'
+    }[gitSyncState]
+
     return (
         <MainCard>
             {error ? (
                 <ErrorBoundary error={error} />
             ) : (
                 <Stack flexDirection='column' sx={{ gap: 3 }}>
+                    {/* ── Page Header ──────────────────────────────────────────── */}
                     <ViewHeader
                         onSearchChange={onSearchChange}
                         search={true}
@@ -509,18 +617,60 @@ const AgentOps = () => {
                         title='AI Agents Versions'
                         description='Manage AI Agent versions'
                     >
-                        {hasPermission('agentops:create') && (
-                            <Button
-                                variant='contained'
-                                startIcon={<IconPlus />}
-                                onClick={handleOpenSaveVersion}
-                            >
-                                Create Version
-                            </Button>
-                        )}
+                        <Stack direction='row' gap={1}>
+                            <Tooltip title={gitSyncTooltip}>
+                                <Button
+                                    variant='outlined'
+                                    startIcon={
+                                        <Badge
+                                            variant='dot'
+                                            overlap='circular'
+                                            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                                            sx={{
+                                                '& .MuiBadge-badge': {
+                                                    backgroundColor: gitSyncStateColor,
+                                                    width: 8,
+                                                    height: 8,
+                                                    minWidth: 8,
+                                                    borderRadius: '50%',
+                                                    border: `1.5px solid ${theme.palette.background.paper}`,
+                                                    bottom: 2,
+                                                    right: 2
+                                                }
+                                            }}
+                                        >
+                                            <IconGitBranch size={18} />
+                                        </Badge>
+                                    }
+                                    onClick={() => setOpenGitSyncDialog(true)}
+                                    sx={{
+                                        textTransform: 'none',
+                                        borderColor: gitSyncStateColor,
+                                        color: gitSyncStateColor,
+                                        '&:hover': {
+                                            borderColor: gitSyncStateColorDark,
+                                            backgroundColor: customization.isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)'
+                                        }
+                                    }}
+                                >
+                                    {gitSyncButtonLabel}
+                                </Button>
+                            </Tooltip>
+                            {hasPermission('agentops:create') && (
+                                <StyledPermissionButton
+                                    permissionId='agentops:create'
+                                    variant='contained'
+                                    startIcon={<IconPlus />}
+                                    sx={{ borderRadius: 2, height: '100%' }}
+                                    onClick={handleOpenSaveVersion}
+                                >
+                                    Create Version
+                                </StyledPermissionButton>
+                            )}
+                        </Stack>
                     </ViewHeader>
 
-                    {/* Grouped Version History */}
+                    {/* ── Version History ───────────────────────────────────── */}
                     {isLoading ? (
                         <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
                             <CircularProgress />
@@ -534,7 +684,7 @@ const AgentOps = () => {
                                     alt='No versions'
                                 />
                             </Box>
-                            <div>No Versions Yet</div>
+                            <Typography variant='body1' color='text.secondary'>No Versions Yet</Typography>
                         </Stack>
                     ) : (
                         <>
@@ -563,13 +713,8 @@ const AgentOps = () => {
                                                     key={`flow-${group.chatFlowId}`}
                                                     sx={{
                                                         backgroundColor: customization.isDarkMode 
-                                                            ? '#1a1a1a'
-                                                            : theme.palette.grey[300],
-                                                        '&:hover': {
-                                                            backgroundColor: customization.isDarkMode
-                                                                ? '#252525'
-                                                                : theme.palette.grey[300]
-                                                        },
+                                                            ? theme.palette.dark.main
+                                                            : theme.palette.grey[200],
                                                         cursor: 'pointer'
                                                     }}
                                                     onClick={() => handleAccordionChange(group.chatFlowId)}
@@ -594,6 +739,20 @@ const AgentOps = () => {
                                                                 color='primary'
                                                                 variant='outlined'
                                                             />
+                                                            {!group.isDeleted && group.hasUnsavedChanges && (
+                                                                <Tooltip title='This agentflow has changes that have not been saved as a version yet'>
+                                                                    <Chip
+                                                                        label='Unsaved Changes'
+                                                                        size='small'
+                                                                        variant='outlined'
+                                                                        sx={{
+                                                                            borderColor: theme.palette.warning.main,
+                                                                            color: theme.palette.warning.main,
+                                                                            fontWeight: 600
+                                                                        }}
+                                                                    />
+                                                                </Tooltip>
+                                                            )}
                                                         </Box>
                                                     </StyledTableCell>
                                                     <StyledTableCell align='right'>
@@ -604,7 +763,7 @@ const AgentOps = () => {
                                                                 handleAccordionChange(group.chatFlowId)
                                                             }}
                                                             sx={{
-                                                                color: theme.palette.text.primary
+                                                                color: theme.palette.text.secondary
                                                             }}
                                                         >
                                                             <IconChevronDown
@@ -630,7 +789,22 @@ const AgentOps = () => {
                                                     >
                                                         <StyledTableCell>{group.chatFlowName}</StyledTableCell>
                                                         <StyledTableCell>
-                                                            v{version.version}
+                                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                                v{version.version}
+                                                                {!group.isDeleted && group.activeVersionId === version.id && (
+                                                                    <Chip
+                                                                        label='Active'
+                                                                        size='small'
+                                                                        sx={{
+                                                                            backgroundColor: theme.palette.success.main,
+                                                                            color: theme.palette.success.contrastText,
+                                                                            fontWeight: 600,
+                                                                            height: 20,
+                                                                            fontSize: '0.7rem'
+                                                                        }}
+                                                                    />
+                                                                )}
+                                                            </Box>
                                                         </StyledTableCell>
                                                         <StyledTableCell>
                                                             <Tooltip title={version.changeDescription || 'No description'}>
@@ -683,20 +857,19 @@ const AgentOps = () => {
 
             {/* Save Version Dialog */}
             <Dialog open={openSaveVersionDialog} onClose={handleCloseSaveVersion} maxWidth='sm' fullWidth>
-                <DialogTitle style={{ fontSize: '1rem' }}>
-                    <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center' }}>
-                        <IconDeviceFloppy style={{ marginRight: '10px' }} />
+                <DialogTitle sx={{ fontSize: '1rem' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <IconDeviceFloppy size={20} />
                         Create Version
-                    </div>
+                    </Box>
                 </DialogTitle>
                 <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <Box>
-                        <div style={{ display: 'flex', flexDirection: 'row' }}>
+                        <Box>
+                        <Box sx={{ display: 'flex', flexDirection: 'row' }}>
                             <Typography>
-                                Select AI Agent<span style={{ color: 'red' }}>&nbsp;*</span>
+                                Select AI Agent<span style={{ color: theme.palette.error.main }}>&nbsp;*</span>
                             </Typography>
-                            <div style={{ flexGrow: 1 }}></div>
-                        </div>
+                        </Box>
                         <Dropdown
                             name='chatflowId'
                             options={agentflows.map((flow) => ({
@@ -736,11 +909,11 @@ const AgentOps = () => {
 
             {/* Edit Version Dialog */}
             <Dialog open={openEditVersionDialog} onClose={handleCloseEditVersion} maxWidth='sm' fullWidth>
-                <DialogTitle style={{ fontSize: '1rem' }}>
-                    <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center' }}>
-                        <IconEdit style={{ marginRight: '10px' }} />
+                <DialogTitle sx={{ fontSize: '1rem' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <IconEdit size={20} />
                         Edit Version Description
-                    </div>
+                    </Box>
                 </DialogTitle>
                 <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <Box>
@@ -778,36 +951,97 @@ const AgentOps = () => {
             </Dialog>
 
             {/* Restore Confirmation Dialog */}
-            <Dialog open={openRestoreDialog} onClose={() => setOpenRestoreDialog(false)} fullWidth maxWidth='sm'>
-                <DialogTitle style={{ fontSize: '1rem' }}>
-                    <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center' }}>
-                        <IconRestore style={{ marginRight: '10px' }} />
+            <Dialog open={openRestoreDialog} onClose={() => { setOpenRestoreDialog(false); setRestoreHasUnsavedChanges(false) }} fullWidth maxWidth='sm'>
+                <DialogTitle sx={{ fontSize: '1rem' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <IconRestore size={20} />
                         Restore {selectedVersion?.chatFlowName} to version v{selectedVersion?.version}
-                    </div>
+                    </Box>
                 </DialogTitle>
-                <DialogContent sx={{ pt: 2, pb: 1 }}>
-                    <Alert 
-                        severity='warning' 
-                        sx={{ 
-                            backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.2)' : 'rgb(255, 244, 229)',
-                            '& .MuiAlert-icon': {
-                                color: theme.palette.mode === 'dark' ? '#ffb74d' : '#ed6c02'
-                            },
-                            '& .MuiAlert-message': {
-                                color: theme.palette.mode === 'dark' ? '#1a1a1a' : 'inherit'
-                            }
+                <DialogContent sx={{ pt: 2, pb: 1, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    {/* Always-visible: restore will overwrite the current live config */}
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: 1.5,
+                            p: 2,
+                            borderRadius: 2,
+                            border: `1px solid ${customization.isDarkMode ? 'rgba(255, 193, 7, 0.3)' : 'rgba(237, 108, 2, 0.2)'}`,
+                            background: customization.isDarkMode
+                                ? 'linear-gradient(135deg, rgba(255, 193, 7, 0.12) 0%, rgba(255, 152, 0, 0.08) 100%)'
+                                : 'linear-gradient(135deg, rgba(255, 244, 229, 1) 0%, rgba(255, 236, 204, 0.6) 100%)'
                         }}
                     >
-                        <Typography variant='body2' sx={{ fontWeight: 500, color: theme.palette.mode === 'dark' ? '#1a1a1a' : 'inherit' }}>
-                            This will replace the current configuration.
+                        <IconAlertTriangle
+                            size={20}
+                            style={{
+                                color: customization.isDarkMode ? '#ffc107' : '#ed6c02',
+                                flexShrink: 0,
+                                marginTop: 2
+                            }}
+                        />
+                        <Typography
+                            variant='body2'
+                            sx={{
+                                fontWeight: 600,
+                                color: customization.isDarkMode ? theme.palette.warning.dark : '#b45309'
+                            }}
+                        >
+                            This will replace the current configuration of{' '}
+                            <strong>{selectedVersion?.chatFlowName}</strong> with version{' '}
+                            <strong>v{selectedVersion?.version}</strong>.
                         </Typography>
-                        <Typography variant='body2' sx={{ mt: 0.5, color: theme.palette.mode === 'dark' ? '#1a1a1a' : 'inherit' }}>
-                            The current configuration will be backed up automatically before restoring.
-                        </Typography>
-                    </Alert>
+                    </Box>
+
+                    {/* Conditional: only shown when the live flow has unsaved changes */}
+                    {restoreHasUnsavedChanges && (
+                        <Box
+                            sx={{
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: 1.5,
+                                p: 2,
+                                borderRadius: 2,
+                                border: `1px solid ${customization.isDarkMode ? 'rgba(244, 67, 54, 0.3)' : 'rgba(211, 47, 47, 0.2)'}`,
+                                background: customization.isDarkMode
+                                    ? 'linear-gradient(135deg, rgba(244, 67, 54, 0.12) 0%, rgba(211, 47, 47, 0.08) 100%)'
+                                    : 'linear-gradient(135deg, rgba(253, 237, 237, 1) 0%, rgba(255, 220, 220, 0.6) 100%)'
+                            }}
+                        >
+                            <IconAlertTriangle
+                                size={20}
+                                style={{
+                                    color: customization.isDarkMode ? '#f44336' : '#d32f2f',
+                                    flexShrink: 0,
+                                    marginTop: 2
+                                }}
+                            />
+                            <Box>
+                                <Typography
+                                    variant='body2'
+                                    sx={{
+                                        fontWeight: 600,
+                                        color: customization.isDarkMode ? theme.palette.error.light : theme.palette.error.dark
+                                    }}
+                                >
+                                    This agentflow has unsaved changes.
+                                </Typography>
+                                <Typography
+                                    variant='body2'
+                                    sx={{
+                                        mt: 0.5,
+                                        color: customization.isDarkMode ? theme.palette.text.primary : theme.palette.text.secondary
+                                    }}
+                                >
+                                    Any changes made since the last saved version will be permanently lost.
+                                </Typography>
+                            </Box>
+                        </Box>
+                    )}
                 </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setOpenRestoreDialog(false)}>Cancel</Button>
+                <DialogActions sx={{ px: 3, pb: 2 }}>
+                    <Button onClick={() => { setOpenRestoreDialog(false); setRestoreHasUnsavedChanges(false) }}>Cancel</Button>
                     <StyledButton
                         variant='contained'
                         onClick={handleConfirmRestore}
@@ -820,35 +1054,57 @@ const AgentOps = () => {
 
             {/* Delete Confirmation Dialog */}
             <Dialog open={openDeleteDialog} onClose={() => setOpenDeleteDialog(false)} fullWidth maxWidth='sm'>
-                <DialogTitle style={{ fontSize: '1rem' }}>
-                    <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center' }}>
-                        <IconTrash style={{ marginRight: '10px' }} />
+                <DialogTitle sx={{ fontSize: '1rem' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <IconTrash size={20} />
                         Delete {selectedVersion?.chatFlowName} version v{selectedVersion?.version}
-                    </div>
+                    </Box>
                 </DialogTitle>
                 <DialogContent sx={{ pt: 2, pb: 1 }}>
-                    <Alert 
-                        severity='error' 
-                        icon={<IconAlertTriangle />}
-                        sx={{ 
-                            backgroundColor: theme.palette.mode === 'dark' ? 'rgba(211, 47, 47, 0.2)' : 'rgb(253, 237, 237)',
-                            '& .MuiAlert-icon': {
-                                color: theme.palette.mode === 'dark' ? '#f44336' : '#d32f2f'
-                            },
-                            '& .MuiAlert-message': {
-                                color: theme.palette.mode === 'dark' ? '#1a1a1a' : 'inherit'
-                            }
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: 1.5,
+                            p: 2,
+                            borderRadius: 2,
+                            border: `1px solid ${customization.isDarkMode ? 'rgba(244, 67, 54, 0.3)' : 'rgba(211, 47, 47, 0.2)'}`,
+                            background: customization.isDarkMode
+                                ? 'linear-gradient(135deg, rgba(244, 67, 54, 0.12) 0%, rgba(211, 47, 47, 0.08) 100%)'
+                                : 'linear-gradient(135deg, rgba(253, 237, 237, 1) 0%, rgba(255, 220, 220, 0.6) 100%)'
                         }}
                     >
-                        <Typography variant='body2' sx={{ fontWeight: 500, color: theme.palette.mode === 'dark' ? '#1a1a1a' : 'inherit' }}>
-                            This action cannot be undone.
-                        </Typography>
-                        <Typography variant='body2' sx={{ mt: 0.5, color: theme.palette.mode === 'dark' ? '#1a1a1a' : 'inherit' }}>
-                            This will permanently remove this version from the history.
-                        </Typography>
-                    </Alert>
+                        <IconAlertTriangle
+                            size={20}
+                            style={{
+                                color: customization.isDarkMode ? '#f44336' : '#d32f2f',
+                                flexShrink: 0,
+                                marginTop: 2
+                            }}
+                        />
+                        <Box>
+                            <Typography
+                                variant='body2'
+                                sx={{
+                                    fontWeight: 600,
+                                    color: customization.isDarkMode ? theme.palette.error.light : theme.palette.error.dark
+                                }}
+                            >
+                                This action cannot be undone.
+                            </Typography>
+                            <Typography
+                                variant='body2'
+                                sx={{
+                                    mt: 0.5,
+                                    color: customization.isDarkMode ? theme.palette.text.primary : theme.palette.text.secondary
+                                }}
+                            >
+                                This will permanently remove this version from the history.
+                            </Typography>
+                        </Box>
+                    </Box>
                 </DialogContent>
-                <DialogActions>
+                <DialogActions sx={{ px: 3, pb: 2 }}>
                     <Button onClick={() => setOpenDeleteDialog(false)}>Cancel</Button>
                     <StyledButton 
                         variant='contained' 
@@ -866,7 +1122,57 @@ const AgentOps = () => {
                 onClose={handleCloseCompareDialog}
                 selectedVersion={selectedVersionForCompare}
                 versions={selectedVersionForCompare ? groupedVersions.find(g => g.versions.some(v => v.id === selectedVersionForCompare.id))?.versions || [] : []}
+                activeFlowChatflowId={selectedVersionForCompare?.chatFlowId || null}
             />
+
+            {/* Git Sync Dialog */}
+            <Dialog
+                open={openGitSyncDialog}
+                onClose={() => setOpenGitSyncDialog(false)}
+                maxWidth='md'
+                fullWidth
+                PaperProps={{
+                    sx: {
+                        height: '85vh',
+                        maxHeight: '85vh',
+                        display: 'flex',
+                        flexDirection: 'column'
+                    }
+                }}
+            >
+                <DialogTitle sx={{ fontSize: '1rem', pb: 1, pr: 6 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <IconGitBranch size={20} />
+                        Git Sync
+                        <Chip
+                            label={gitSyncChipLabel}
+                            size='small'
+                            sx={{
+                                backgroundColor: `${gitSyncStateColor}20`,
+                                color: gitSyncStateColor,
+                                fontWeight: 600,
+                                fontSize: '0.75rem'
+                            }}
+                        />
+                    </Box>
+                    <IconButton
+                        onClick={() => setOpenGitSyncDialog(false)}
+                        size='small'
+                        sx={{ position: 'absolute', right: 12, top: 12 }}
+                    >
+                        <IconX size={18} />
+                    </IconButton>
+                </DialogTitle>
+                <DialogContent
+                    sx={{
+                        flex: 1,
+                        overflow: 'auto',
+                        pt: '8px !important'
+                    }}
+                >
+                    <GitSyncPanel onStatusChange={() => getGitSyncStatusApi.request()} />
+                </DialogContent>
+            </Dialog>
         </MainCard>
     )
 }

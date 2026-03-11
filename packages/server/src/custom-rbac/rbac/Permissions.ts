@@ -55,6 +55,7 @@ export class Permissions {
         agentopsCategory.addPermission(new Permission('agentops:update', 'Edit Version'))
         agentopsCategory.addPermission(new Permission('agentops:restore', 'Restore Version'))
         agentopsCategory.addPermission(new Permission('agentops:delete', 'Delete Version'))
+        agentopsCategory.addPermission(new Permission('agentops:git-sync', 'Git Synchronization'))
         this.categories.push(agentopsCategory)
 
         const toolsCategory = new PermissionCategory('tools')

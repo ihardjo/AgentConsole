@@ -16,6 +16,9 @@ router.get('/agentflows', checkAnyPermission('agentops:view,agentops:create'), c
 // Compare two versions (must be before /:versionId to avoid route conflict)
 router.get('/compare/:versionIdA/:versionIdB', checkAnyPermission('agentops:view'), chatflowVersionController.compareVersions)
 
+// Compare a saved version against the live active flow
+router.get('/compare/:versionId/active/:chatflowId', checkAnyPermission('agentops:view'), chatflowVersionController.compareVersionWithActive)
+
 // Get all versions for a specific chatflow
 router.get(
     '/chatflow/:chatflowId',

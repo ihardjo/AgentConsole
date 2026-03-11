@@ -245,6 +245,7 @@ export class CustomPermissions {
         // ========================================
         const agentOpsCategory = new PermissionCategory('agentOps')
         agentOpsCategory.addPermission(new Permission('agentops:view', 'View Agent Ops'))
+        agentOpsCategory.addPermission(new Permission('agentops:git-sync', 'Git Synchronization'))
         this.categories.push(agentOpsCategory)
 
         // ========================================

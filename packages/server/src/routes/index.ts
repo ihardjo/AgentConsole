@@ -56,6 +56,7 @@ import executionsRouter from './executions'
 import validationRouter from './validation'
 import agentflowv2GeneratorRouter from './agentflowv2-generator'
 import textToSpeechRouter from './text-to-speech'
+import gitSyncRouter from './git-sync'
 
 import authRouter from '../enterprise/routes/auth'
 import auditRouter from '../enterprise/routes/audit'
@@ -137,6 +138,7 @@ router.use('/executions', executionsRouter)
 router.use('/validation', validationRouter)
 router.use('/agentflowv2-generator', agentflowv2GeneratorRouter)
 router.use('/text-to-speech', textToSpeechRouter)
+router.use('/git-sync', gitSyncRouter)
 
 router.use('/auth', authRouter)
 router.use('/audit', IdentityManager.checkFeatureByPlan('feat:login-activity'), auditRouter)
