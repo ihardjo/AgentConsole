@@ -39,6 +39,30 @@ export interface AgentRun extends Run {
     actions: AgentAction[]
 }
 
+/**
+ * Metadata for LLM generation events (used by LangFuse)
+ */
+export interface ILLMMetadata {
+    model?: string
+    modelParameters?: {
+        temperature?: number
+        maxTokens?: number
+        topP?: number
+        frequencyPenalty?: number
+        presencePenalty?: number
+        [key: string]: any
+    }
+}
+
+/**
+ * Token usage data for LLM generation events (used by LangFuse)
+ */
+export interface ITokenUsage {
+    promptTokens?: number
+    completionTokens?: number
+    totalTokens?: number
+}
+
 interface ArizeTracerOptions {
     apiKey: string
     spaceId: string
@@ -1268,7 +1292,7 @@ export class AnalyticHandler {
         }
     }
 
-    async onLLMStart(name: string, input: string | BaseMessageLike[], parentIds: ICommonObject) {
+    async onLLMStart(name: string, input: string | BaseMessageLike[], parentIds: ICommonObject, metadata?: ILLMMetadata) {
         const returnIds: ICommonObject = {
             langSmith: {},
             langFuse: {},
@@ -1302,10 +1326,17 @@ export class AnalyticHandler {
         if (Object.prototype.hasOwnProperty.call(this.handlers, 'langFuse')) {
             const trace: LangfuseTraceClient | undefined = this.handlers['langFuse'].trace[parentIds['langFuse'].trace]
             if (trace) {
-                const generation = trace.generation({
+                const generationParams: any = {
                     name,
                     input: input
-                })
+                }
+                if (metadata?.model) {
+                    generationParams.model = metadata.model
+                }
+                if (metadata?.modelParameters) {
+                    generationParams.modelParameters = metadata.modelParameters
+                }
+                const generation = trace.generation(generationParams)
                 this.handlers['langFuse'].generation = { [generation.id]: generation }
                 returnIds['langFuse'].generation = generation.id
             }
@@ -1400,7 +1431,7 @@ export class AnalyticHandler {
         return returnIds
     }
 
-    async onLLMEnd(returnIds: ICommonObject, output: string) {
+    async onLLMEnd(returnIds: ICommonObject, output: string, usage?: ITokenUsage) {
         if (Object.prototype.hasOwnProperty.call(this.handlers, 'langSmith')) {
             const llmRun: RunTree | undefined = this.handlers['langSmith'].llmRun[returnIds['langSmith'].llmRun]
             if (llmRun) {
@@ -1416,9 +1447,25 @@ export class AnalyticHandler {
         if (Object.prototype.hasOwnProperty.call(this.handlers, 'langFuse')) {
             const generation: LangfuseGenerationClient | undefined = this.handlers['langFuse'].generation[returnIds['langFuse'].generation]
             if (generation) {
-                generation.end({
+                const endParams: any = {
                     output: output
-                })
+                }
+                if (
+                    usage &&
+                    (usage.promptTokens !== undefined || usage.completionTokens !== undefined || usage.totalTokens !== undefined)
+                ) {
+                    endParams.usage = {}
+                    if (usage.promptTokens !== undefined) {
+                        endParams.usage.promptTokens = usage.promptTokens
+                    }
+                    if (usage.completionTokens !== undefined) {
+                        endParams.usage.completionTokens = usage.completionTokens
+                    }
+                    if (usage.totalTokens !== undefined) {
+                        endParams.usage.totalTokens = usage.totalTokens
+                    }
+                }
+                generation.end(endParams)
             }
         }
 
