@@ -14,7 +14,7 @@ import { getCredentialData, getCredentialParam } from '../../../src/utils'
 import fetch from 'node-fetch'
 import { flatten, uniqWith, isEqual } from 'lodash'
 import { zodToJsonSchema } from 'zod-to-json-schema'
-import { AnalyticHandler } from '../../../src/handler'
+import { AnalyticHandler, ILLMMetadata } from '../../../src/handler'
 import { Moderation, checkInputs, streamResponse } from '../../moderation/Moderation'
 import { formatResponse } from '../../outputparsers/OutputParserHelpers'
 import { addSingleFileToStorage } from '../../../src/storageUtils'
@@ -344,7 +344,10 @@ class OpenAIAssistant_Agents implements INode {
             })
 
             // Run assistant thread
-            const llmIds = await analyticHandlers.onLLMStart('ChatOpenAI', input, parentIds)
+            const llmMetadata: ILLMMetadata = {
+                model: retrievedAssistant.model
+            }
+            const llmIds = await analyticHandlers.onLLMStart('ChatOpenAI', input, parentIds, llmMetadata)
 
             let text = ''
             let runThreadId = ''

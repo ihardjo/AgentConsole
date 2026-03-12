@@ -1,4 +1,4 @@
-import { AnalyticHandler } from '../../../src/handler'
+import { AnalyticHandler, ILLMMetadata, ITokenUsage } from '../../../src/handler'
 import { ICommonObject, INode, INodeData, INodeOptionsValue, INodeOutputsValue, INodeParams } from '../../../src/Interface'
 import { AIMessageChunk, BaseMessageLike } from '@langchain/core/messages'
 import {
@@ -364,7 +364,14 @@ class ConditionAgent_Agentflow implements INode {
             // Start analytics
             if (analyticHandlers && options.parentTraceIds) {
                 const llmLabel = options?.componentNodes?.[model]?.label || model
-                llmIds = await analyticHandlers.onLLMStart(llmLabel, messages, options.parentTraceIds)
+                const llmMetadata: ILLMMetadata = {
+                    model: modelConfig?.modelName || modelConfig?.model || model,
+                    modelParameters: {
+                        temperature: modelConfig?.temperature,
+                        maxTokens: modelConfig?.maxTokens
+                    }
+                }
+                llmIds = await analyticHandlers.onLLMStart(llmLabel, messages, options.parentTraceIds, llmMetadata)
             }
 
             // Track execution time
@@ -378,9 +385,17 @@ class ConditionAgent_Agentflow implements INode {
 
             // End analytics tracking
             if (analyticHandlers && llmIds) {
+                const tokenUsage: ITokenUsage | undefined = response.usage_metadata
+                    ? {
+                          promptTokens: response.usage_metadata.input_tokens,
+                          completionTokens: response.usage_metadata.output_tokens,
+                          totalTokens: response.usage_metadata.total_tokens
+                      }
+                    : undefined
                 await analyticHandlers.onLLMEnd(
                     llmIds,
-                    typeof response.content === 'string' ? response.content : JSON.stringify(response.content)
+                    typeof response.content === 'string' ? response.content : JSON.stringify(response.content),
+                    tokenUsage
                 )
             }
 
