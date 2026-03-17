@@ -720,6 +720,8 @@ export class AnalyticHandler {
     private initialized: boolean = false
     private analyticsConfig: string | undefined
     private chatId: string
+    private agentflowId: string | undefined
+    private agentflowName: string | undefined
     private createdAt: number
 
     private constructor(nodeData: INodeData, options: ICommonObject) {
@@ -727,6 +729,8 @@ export class AnalyticHandler {
         this.options = options
         this.analyticsConfig = options.analytic
         this.chatId = options.chatId
+        this.agentflowId = options.agentflowId
+        this.agentflowName = options.agentflowName
         this.createdAt = Date.now()
     }
 
@@ -941,10 +945,30 @@ export class AnalyticHandler {
 
             if (!parentIds || !Object.keys(parentIds).length) {
                 const langfuse: Langfuse = this.handlers['langFuse'].client
+
+                // Build tags array for agentflow identification
+                const tags: string[] = []
+                if (this.agentflowId) {
+                    tags.push(`agentflow-id:${this.agentflowId}`)
+                }
+                if (this.agentflowName) {
+                    tags.push(this.agentflowName)
+                }
+
+                // Build metadata with agentflow info
+                const metadata: Record<string, any> = { tags: ['openai-assistant'] }
+                if (this.agentflowId) {
+                    metadata.agentflowId = this.agentflowId
+                }
+                if (this.agentflowName) {
+                    metadata.agentflowName = this.agentflowName
+                }
+
                 langfuseTraceClient = langfuse.trace({
-                    name,
+                    name: this.agentflowName || name,
                     sessionId: this.options.chatId,
-                    metadata: { tags: ['openai-assistant'] },
+                    tags: tags.length > 0 ? tags : undefined,
+                    metadata,
                     ...this.nodeData?.inputs?.analytics?.langFuse
                 })
             } else {

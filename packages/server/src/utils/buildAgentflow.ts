@@ -402,7 +402,7 @@ export const resolveVariables = async (
                 const formattedValue =
                     Array.isArray(actualValue) || (typeof actualValue === 'object' && actualValue !== null)
                         ? JSON.stringify(actualValue)
-                        : actualValue?.toString() ?? match
+                        : (actualValue?.toString() ?? match)
                 resolvedValue = resolvedValue.replace(match, formattedValue)
             }
         }
@@ -1614,7 +1614,7 @@ export const executeAgentFlow = async ({
         const startAgentflowNode = nodes.find((node) => node.data.name === 'startAgentflow')
         const isStartStateEnabled =
             nodeOverrides && startAgentflowNode
-                ? nodeOverrides[startAgentflowNode.data.label]?.find((param: any) => param.name === 'startState')?.enabled ?? false
+                ? (nodeOverrides[startAgentflowNode.data.label]?.find((param: any) => param.name === 'startState')?.enabled ?? false)
                 : false
 
         if (isStartStateEnabled && overrideConfig?.startState) {
@@ -1887,11 +1887,13 @@ export const executeAgentFlow = async ({
                 databaseEntities,
                 componentNodes,
                 analytic: chatflow.analytic,
-                chatId
+                chatId,
+                agentflowId: chatflow.id,
+                agentflowName: chatflow.name
             })
             await analyticHandlers.init()
             parentTraceIds = await analyticHandlers.onChainStart(
-                'Agentflow',
+                chatflow.name || 'Agentflow',
                 form && Object.keys(form).length > 0 ? JSON.stringify(form) : question || ''
             )
         }
