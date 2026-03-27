@@ -2,7 +2,7 @@ version: '3.1'
 
 services:
     flowise:
-        image: agentconsole:3.0.8-staging-source
+        image: agentconsole:3.0.12-staging
         restart: always
         environment:
             - PORT=${PORT}
@@ -140,6 +140,12 @@ services:
             - HTTP_SECURITY_CHECK=${HTTP_SECURITY_CHECK}
             - PATH_TRAVERSAL_SAFETY=${PATH_TRAVERSAL_SAFETY}
             - TRUST_PROXY=${TRUST_PROXY}
+
+            # TEMPORAL CONFIGURATION
+            - TEMPORAL_ADDRESS=${TEMPORAL_ADDRESS:-host.containers.internal:7233}
+            - TEMPORAL_NAMESPACE=${TEMPORAL_NAMESPACE:-default}
+            - TEMPORAL_TASK_QUEUE=${TEMPORAL_TASK_QUEUE:-agentconsole-durable-workflows}
+            - TEMPORAL_WEB_UI_URL=${TEMPORAL_WEB_UI_URL:-http://host.containers.internal:8080}
         ports:
             - '${PORT}:${PORT}'
         healthcheck:
@@ -149,5 +155,5 @@ services:
             retries: 5
             start_period: 30s
         volumes:
-            - ~/.flowise:/root/.flowise
-        entrypoint: /bin/sh -c "sleep 3; flowise start"
+            - ./flowise-data:/flowise-data
+        entrypoint: /bin/sh -c "sleep 3; pnpm start"

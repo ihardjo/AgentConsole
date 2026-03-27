@@ -2,7 +2,7 @@ version: '3.1'
 
 services:
     flowise:
-        image: agentconsole-worker:3.0.8-staging-source
+        image: agentconsole-worker:3.0.12-staging
         restart: always
         environment:
             - WORKER_PORT=${WORKER_PORT:-5566}
@@ -140,6 +140,12 @@ services:
             - HTTP_SECURITY_CHECK=${HTTP_SECURITY_CHECK}
             - PATH_TRAVERSAL_SAFETY=${PATH_TRAVERSAL_SAFETY}
             - TRUST_PROXY=${TRUST_PROXY}
+
+            # TEMPORAL CONFIGURATION
+            - TEMPORAL_ADDRESS=${TEMPORAL_ADDRESS:-host.containers.internal:7233}
+            - TEMPORAL_NAMESPACE=${TEMPORAL_NAMESPACE:-default}
+            - TEMPORAL_TASK_QUEUE=${TEMPORAL_TASK_QUEUE:-agentconsole-durable-workflows}
+            - TEMPORAL_WEB_UI_URL=${TEMPORAL_WEB_UI_URL:-http://host.containers.internal:8080}
         ports:
             - '${WORKER_PORT}:${WORKER_PORT}'
         healthcheck:
@@ -149,5 +155,5 @@ services:
             retries: 5
             start_period: 30s
         volumes:
-            - ~/.flowise:/root/.flowise
+            - ../flowise-data:/flowise-data
         entrypoint: /bin/sh -c "node /app/healthcheck/healthcheck.js & sleep 5 && pnpm run start-worker"

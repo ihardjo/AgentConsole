@@ -25,6 +25,13 @@ export const REMOVE_SNACKBAR = 'REMOVE_SNACKBAR'
 export const SHOW_CONFIRM = 'SHOW_CONFIRM'
 export const HIDE_CONFIRM = 'HIDE_CONFIRM'
 
+// action - temporal reducer
+export const SET_TEMPORAL_WORKFLOW = '@temporal/SET_WORKFLOW'
+export const SET_TEMPORAL_DIRTY = '@temporal/SET_DIRTY'
+export const REMOVE_TEMPORAL_DIRTY = '@temporal/REMOVE_DIRTY'
+export const SET_TEMPORAL_EXECUTION_STATUS = '@temporal/SET_EXECUTION_STATUS'
+export const SET_TEMPORAL_AGENTFLOWS = '@temporal/SET_AGENTFLOWS'
+
 export const enqueueSnackbar = (notification) => {
     const key = notification.options && notification.options.key
 

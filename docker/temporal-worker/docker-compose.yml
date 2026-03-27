@@ -1,0 +1,38 @@
+version: '3.1'
+
+services:
+    temporal-worker:
+        build:
+            context: ../..
+            dockerfile: docker/temporal-worker/Dockerfile
+        image: agentconsole-temporal-worker:latest
+        container_name: temporal-worker
+        restart: always
+        environment:
+            # TEMPORAL CONFIGURATION
+            - TEMPORAL_ADDRESS=${TEMPORAL_ADDRESS:-host.containers.internal:7233}
+            - TEMPORAL_NAMESPACE=${TEMPORAL_NAMESPACE:-default}
+            - TEMPORAL_TASK_QUEUE=${TEMPORAL_TASK_QUEUE:-agentconsole-durable-workflows}
+
+            # FLOWISE API (for calling AgentFlows)
+            - FLOWISE_API_URL=${FLOWISE_API_URL:-http://host.containers.internal:3000}
+
+            # DATABASE (for fetching flow definitions)
+            - DATABASE_TYPE=${DATABASE_TYPE}
+            - DATABASE_PORT=${DATABASE_PORT}
+            - DATABASE_HOST=${DATABASE_HOST}
+            - DATABASE_NAME=${DATABASE_NAME}
+            - DATABASE_USER=${DATABASE_USER}
+            - DATABASE_PASSWORD=${DATABASE_PASSWORD}
+            - DATABASE_SSL=${DATABASE_SSL}
+            - DATABASE_SSL_KEY_BASE64=${DATABASE_SSL_KEY_BASE64}
+
+            # SECRET KEYS (needed for database encryption)
+            - SECRETKEY_PATH=${SECRETKEY_PATH}
+            - FLOWISE_SECRETKEY_OVERWRITE=${FLOWISE_SECRETKEY_OVERWRITE}
+
+            # LOGGING
+            - LOG_LEVEL=${LOG_LEVEL:-info}
+            - LOG_PATH=${LOG_PATH}
+        volumes:
+            - ../flowise-data:/flowise-data
