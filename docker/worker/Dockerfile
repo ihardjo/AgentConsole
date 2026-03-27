@@ -1,3 +1,6 @@
+# Worker Dockerfile - builds only server-side packages (no UI)
+# This significantly reduces build time and memory usage
+
 FROM node:20-alpine
 
 RUN apk add --update libc6-compat python3 make g++
@@ -13,7 +16,7 @@ RUN npm install -g pnpm
 ENV PUPPETEER_SKIP_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
-ENV NODE_OPTIONS=--max-old-space-size=8192
+ENV NODE_OPTIONS=--max-old-space-size=4096
 
 WORKDIR /usr/src
 
@@ -22,7 +25,9 @@ COPY . .
 
 RUN pnpm install
 
-RUN pnpm build
+# Build only the packages needed for the worker (skip UI to save memory and time)
+# The worker needs: flowise-components, flowise-api, flowise (server), and temporal-worker
+RUN pnpm build --filter=flowise-components --filter=flowise-api --filter=flowise --filter=temporal-worker
 
 # Create data directories that the application needs
 # These can be overridden by environment variables (DATABASE_PATH, LOG_PATH, BLOB_STORAGE_PATH)

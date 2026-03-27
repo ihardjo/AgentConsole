@@ -29,7 +29,8 @@ import {
     IconShieldCheck,
     IconInfinity,
     IconCloudCog,
-    IconExternalLink
+    IconExternalLink,
+    IconClock
 } from '@tabler/icons-react'
 
 // constant
@@ -63,7 +64,8 @@ const icons = {
     IconShieldCheck,
     IconInfinity,
     IconCloudCog,
-    IconExternalLink
+    IconExternalLink,
+    IconClock
 }
 
 // ==============================|| DASHBOARD MENU ITEMS ||============================== //
@@ -104,6 +106,20 @@ const dashboard = {
                     icon: icons.IconListCheck,
                     breadcrumbs: true,
                     permission: 'executions:view'
+                },
+                {
+                    id: 'temporalflows',
+                    title: 'Durable Workflows',
+                    type: 'item',
+                    url: '/temporalflows',
+                    icon: icons.IconClock,
+                    breadcrumbs: true,
+                    permission: 'temporalflows:view',
+                    chip: {
+                        label: 'BETA',
+                        color: 'warning',
+                        size: 'small'
+                    }
                 },
                 {
                     id: 'assistants',
@@ -281,7 +297,7 @@ const dashboard = {
                     icon: icons.IconSettings,
                     breadcrumbs: true,
                     permission: 'platformConfiguration:manage'
-                },
+                }
                 // {
                 //     id: 'user-activity',
                 //     title: 'User Activity',

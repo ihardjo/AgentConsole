@@ -1,0 +1,37 @@
+{
+    "name": "temporal-worker",
+    "version": "1.0.0",
+    "description": "Temporal Worker for AgentConsole Durable Workflows",
+    "main": "dist/worker.js",
+    "types": "dist/worker.d.ts",
+    "scripts": {
+        "build": "tsc",
+        "clean": "rimraf dist",
+        "nuke": "rimraf dist node_modules .turbo",
+        "dev": "ts-node src/worker.ts",
+        "start": "node dist/worker.js",
+        "watch": "tsc --watch"
+    },
+    "keywords": [],
+    "license": "SEE LICENSE IN LICENSE.md",
+    "dependencies": {
+        "@temporalio/activity": "^1.11.6",
+        "@temporalio/client": "^1.11.6",
+        "@temporalio/worker": "^1.11.6",
+        "@temporalio/workflow": "^1.11.6",
+        "axios": "1.12.0",
+        "dotenv": "^16.0.0",
+        "pg": "^8.11.3",
+        "reflect-metadata": "^0.1.13",
+        "typeorm": "^0.3.20"
+    },
+    "devDependencies": {
+        "@types/node": "^20.10.0",
+        "rimraf": "^5.0.5",
+        "ts-node": "^10.7.0",
+        "typescript": "^5.4.5"
+    },
+    "engines": {
+        "node": ">=18.15.0 <19.0.0 || ^20"
+    }
+}

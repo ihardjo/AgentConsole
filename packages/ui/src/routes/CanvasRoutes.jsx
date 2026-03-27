@@ -10,6 +10,7 @@ const Canvas = Loadable(lazy(() => import('@/views/canvas')))
 const MarketplaceCanvas = Loadable(lazy(() => import('@/views/marketplaces/MarketplaceCanvas')))
 const CanvasV2 = Loadable(lazy(() => import('@/views/agentflowsv2/Canvas')))
 const MarketplaceCanvasV2 = Loadable(lazy(() => import('@/views/agentflowsv2/MarketplaceCanvas')))
+const TemporalCanvas = Loadable(lazy(() => import('@/views/temporalflows/TemporalCanvas')))
 
 // ==============================|| CANVAS ROUTING ||============================== //
 
@@ -78,6 +79,22 @@ const CanvasRoutes = {
             element: (
                 <RequireAuth permission={'templates:marketplace,templates:custom'}>
                     <MarketplaceCanvasV2 />
+                </RequireAuth>
+            )
+        },
+        {
+            path: '/temporalcanvas',
+            element: (
+                <RequireAuth permission={'temporalflows:view'}>
+                    <TemporalCanvas />
+                </RequireAuth>
+            )
+        },
+        {
+            path: '/temporalcanvas/:id',
+            element: (
+                <RequireAuth permission={'temporalflows:view'}>
+                    <TemporalCanvas />
                 </RequireAuth>
             )
         }

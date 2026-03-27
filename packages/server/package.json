@@ -67,6 +67,7 @@
         "@keyv/redis": "^4.2.0",
         "@oclif/core": "4.0.7",
         "@opentelemetry/api": "1.9.0",
+        "@temporalio/client": "^1.11.6",
         "@opentelemetry/auto-instrumentations-node": "^0.52.0",
         "@opentelemetry/core": "1.27.0",
         "@opentelemetry/exporter-metrics-otlp-grpc": "0.54.0",

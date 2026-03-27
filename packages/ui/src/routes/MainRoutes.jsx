@@ -61,6 +61,9 @@ const Logs = Loadable(lazy(() => import('@/views/serverlogs')))
 // executions routing
 const Executions = Loadable(lazy(() => import('@/views/agentexecutions')))
 
+// temporal workflows routing
+const TemporalFlows = Loadable(lazy(() => import('@/views/temporalflows')))
+
 // enterprise features
 const UsersPage = Loadable(lazy(() => import('@/views/users')))
 const RolesPage = Loadable(lazy(() => import('@/views/roles')))
@@ -112,6 +115,14 @@ const MainRoutes = {
             element: (
                 <RequireAuth permission={'executions:view'}>
                     <Executions />
+                </RequireAuth>
+            )
+        },
+        {
+            path: '/temporalflows',
+            element: (
+                <RequireAuth permission={'temporalflows:view'}>
+                    <TemporalFlows />
                 </RequireAuth>
             )
         },
