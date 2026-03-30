@@ -17,8 +17,13 @@ router.delete('/workflows/:id', temporalController.deleteWorkflow)
 router.post('/workflows/:id/start', temporalController.startWorkflow)
 router.post('/workflows/:workflowId/signal', temporalController.sendSignal)
 router.get('/workflows/:workflowId/status', temporalController.getWorkflowStatus)
-
 // AgentFlows list for dropdown
 router.get('/agentflows', temporalController.getWorkspaceAgentFlows)
+// Schedule management
+router.get('/schedules/:scheduleId', temporalController.getScheduleDetails)
+router.post('/schedules/:scheduleId/pause', temporalController.pauseSchedule)
+router.post('/schedules/:scheduleId/unpause', temporalController.unpauseSchedule)
+router.post('/schedules/:scheduleId/trigger', temporalController.triggerSchedule)
+router.delete('/schedules/:scheduleId', temporalController.deleteSchedule)
 
 export default router

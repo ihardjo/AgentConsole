@@ -14,15 +14,9 @@ import {
     closeSnackbar as closeSnackbarAction
 } from '@/store/actions'
 import { cloneDeep } from 'lodash'
-
-// material-ui
-import { Toolbar, Box, AppBar, Button, Fab, Chip, IconButton, Typography, Tooltip } from '@mui/material'
+import { Toolbar, Box, AppBar, Button, Fab, Chip, IconButton, Typography, Tooltip, Menu, MenuItem, Divider } from '@mui/material'
 import { useTheme } from '@mui/material/styles'
-
-// project imports
 import ConfirmDialog from '@/ui-component/dialog/ConfirmDialog'
-
-// Temporal node components
 import TemporalStartNode from './nodes/StartNode'
 import TemporalAgentFlowCallNode from './nodes/AgentFlowCallNode'
 import TemporalTimerNode from './nodes/TimerNode'
@@ -32,16 +26,10 @@ import TemporalHTTPRequestNode from './nodes/HTTPRequestNode'
 import TemporalEdge from './TemporalEdge'
 import AddTemporalNodes from './AddTemporalNodes'
 import TemporalNodeConfigDialog from './TemporalNodeConfigDialog'
-
-// API
 import temporalApi from '@/api/temporal'
 import apikeyApi from '@/api/apikey'
-
-// Hooks
 import useApi from '@/hooks/useApi'
 import useConfirm from '@/hooks/useConfirm'
-
-// icons
 import {
     IconX,
     IconDeviceFloppy,
@@ -51,14 +39,15 @@ import {
     IconMagnetFilled,
     IconMagnetOff,
     IconArtboard,
-    IconArtboardOff
+    IconArtboardOff,
+    IconClock,
+    IconCircleCheck,
+    IconCircleOff,
+    IconDots
 } from '@tabler/icons-react'
-
-// utils
 import useNotifier from '@/utils/useNotifier'
 import { usePrompt } from '@/utils/usePrompt'
 
-// Node types registration
 const nodeTypes = {
     temporalStart: TemporalStartNode,
     temporalAgentFlowCall: TemporalAgentFlowCallNode,
@@ -71,74 +60,87 @@ const nodeTypes = {
 const edgeTypes = {
     temporal: TemporalEdge
 }
-
-// ==============================|| TEMPORAL CANVAS ||============================== //
-
 const TemporalCanvas = () => {
     const theme = useTheme()
     const navigate = useNavigate()
     const customization = useSelector((state) => state.customization)
-
     const { state } = useLocation()
-
     const URLpath = document.location.pathname.toString().split('/')
     const workflowId = URLpath[URLpath.length - 1] === 'temporalcanvas' ? '' : URLpath[URLpath.length - 1]
-
     const { confirm } = useConfirm()
-
     const dispatch = useDispatch()
     const temporal = useSelector((state) => state.temporal)
     const [workflow, setWorkflow] = useState(null)
-
-    // ==============================|| Snackbar ||============================== //
-
+    const [scheduleDetails, setScheduleDetails] = useState(null)
+    const [scheduleAnchorEl, setScheduleAnchorEl] = useState(null)
     useNotifier()
     const enqueueSnackbar = (...args) => dispatch(enqueueSnackbarAction(...args))
     const closeSnackbar = (...args) => dispatch(closeSnackbarAction(...args))
-
-    // ==============================|| ReactFlow ||============================== //
-
     const [nodes, setNodes, onNodesChange] = useNodesState([])
     const [edges, setEdges, onEdgesChange] = useEdgesState([])
     const [reactFlowInstance, setReactFlowInstance] = useState(null)
-
     const [selectedNode, setSelectedNode] = useState(null)
     const [configDialogOpen, setConfigDialogOpen] = useState(false)
     const [configDialogProps, setConfigDialogProps] = useState({})
     const [isSnappingEnabled, setIsSnappingEnabled] = useState(false)
     const [isBackgroundEnabled, setIsBackgroundEnabled] = useState(true)
     const [workflowName, setWorkflowName] = useState('Untitled Workflow')
-
     const reactFlowWrapper = useRef(null)
-
-    // ==============================|| API ||============================== //
-
     const getTemporalWorkflowApi = useApi(temporalApi.getTemporalWorkflow)
     const createTemporalWorkflowApi = useApi(temporalApi.createTemporalWorkflow)
     const updateTemporalWorkflowApi = useApi(temporalApi.updateTemporalWorkflow)
     const getAgentFlowsApi = useApi(temporalApi.getAgentFlows)
     const startWorkflowApi = useApi(temporalApi.startTemporalWorkflow)
     const getApiKeysApi = useApi(apikeyApi.getAllAPIKeys)
-
-    // State for API keys
     const [apiKeys, setApiKeys] = useState([])
 
-    // ==============================|| Events & Actions ||============================== //
+    const getStartNode = useCallback(() => {
+        return nodes.find((n) => n.type === 'temporalStart')
+    }, [nodes])
+    const startNodeData = useMemo(() => getStartNode()?.data, [getStartNode, nodes])
+    const startNodeScheduleId = startNodeData?.scheduleId || null
+    const startNodeTriggerMode = startNodeData?.triggerMode || 'manual'
+    const isSchedulePaused = scheduleDetails?.status?.paused ?? false
+    const hasScheduleId = !!startNodeScheduleId
+
+    const runButtonLabel = useMemo(() => {
+        if (startNodeTriggerMode === 'manual') return 'Run'
+        return hasScheduleId ? 'Reschedule' : 'Schedule'
+    }, [startNodeTriggerMode, hasScheduleId])
+
+    const fetchScheduleDetails = useCallback(
+        async (scheduleId) => {
+            try {
+                const result = await temporalApi.getScheduleDetails(scheduleId)
+                setScheduleDetails(result.data)
+            } catch (error) {
+                setScheduleDetails(null)
+                enqueueSnackbar({
+                    message: `Failed to fetch schedule status: ${error.response?.data?.message || error.message}`,
+                    options: {
+                        key: new Date().getTime() + Math.random(),
+                        variant: 'error',
+                        action: (key) => (
+                            <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
+                                <IconX />
+                            </Button>
+                        )
+                    }
+                })
+            }
+        },
+        [enqueueSnackbar, closeSnackbar]
+    )
 
     const onConnect = useCallback(
         (params) => {
-            // Basic connection validation
             const sourceNode = nodes.find((n) => n.id === params.source)
             const targetNode = nodes.find((n) => n.id === params.target)
-
             if (!sourceNode || !targetNode) return
-
-            // Determine edge label for condition nodes
             let edgeLabel = undefined
             if (sourceNode.type === 'temporalCondition') {
                 edgeLabel = params.sourceHandle?.includes('true') ? 'True' : 'False'
             }
-
             const newEdge = {
                 ...params,
                 type: 'temporal',
@@ -147,7 +149,6 @@ const TemporalCanvas = () => {
                 },
                 id: `${params.source}-${params.sourceHandle}-${params.target}-${params.targetHandle}`
             }
-
             setEdges((eds) => addEdge(newEdge, eds))
             setDirty()
         },
@@ -162,7 +163,6 @@ const TemporalCanvas = () => {
             cancelButtonName: 'Cancel'
         }
         const isConfirmed = await confirm(confirmPayload)
-
         if (isConfirmed) {
             try {
                 await temporalApi.deleteTemporalWorkflow(workflow.id)
@@ -188,13 +188,10 @@ const TemporalCanvas = () => {
 
     const handleSaveFlow = async () => {
         if (!reactFlowInstance) return
-
         const rfInstanceObject = reactFlowInstance.toObject()
         const flowData = JSON.stringify(rfInstanceObject)
-
         try {
             if (!workflow?.id) {
-                // Create new workflow
                 const newWorkflowBody = {
                     name: workflowName,
                     flowData,
@@ -202,7 +199,6 @@ const TemporalCanvas = () => {
                 }
                 createTemporalWorkflowApi.request(newWorkflowBody)
             } else {
-                // Update existing workflow
                 const updateBody = {
                     name: workflowName,
                     flowData
@@ -230,11 +226,49 @@ const TemporalCanvas = () => {
             })
             return
         }
-
+        if (startNodeTriggerMode === 'scheduled' && hasScheduleId) {
+            const confirmPayload = {
+                title: 'Reschedule',
+                description: 'This will delete the existing schedule and create a new one. Continue?',
+                confirmButtonName: 'Reschedule',
+                cancelButtonName: 'Cancel'
+            }
+            const isConfirmed = await confirm(confirmPayload)
+            if (!isConfirmed) return
+            try {
+                await temporalApi.deleteSchedule(startNodeScheduleId)
+                setScheduleDetails(null)
+            } catch (error) {
+                enqueueSnackbar({
+                    message: `Failed to delete existing schedule: ${error.response?.data?.message || error.message}`,
+                    options: {
+                        key: new Date().getTime() + Math.random(),
+                        variant: 'error',
+                        persist: true,
+                        action: (key) => (
+                            <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
+                                <IconX />
+                            </Button>
+                        )
+                    }
+                })
+                return
+            }
+        }
         try {
             const result = await temporalApi.startTemporalWorkflow(workflow.id, {})
+            const data = result.data
+            let message
+            if (data.triggerMode === 'scheduled') {
+                message = `Schedule created: ${data.scheduleId} (every ${data.scheduleInterval})`
+            } else {
+                message = `Workflow started: ${data.workflowId}`
+            }
+            if (data.scheduleId) {
+                fetchScheduleDetails(data.scheduleId)
+            }
             enqueueSnackbar({
-                message: `Workflow started: ${result.data.workflowId}`,
+                message,
                 options: {
                     key: new Date().getTime() + Math.random(),
                     variant: 'success',
@@ -263,9 +297,170 @@ const TemporalCanvas = () => {
     }
 
     const handleOpenTemporalUI = () => {
-        // Open Temporal Web UI - configurable via environment
         const temporalWebUIUrl = window.TEMPORAL_WEB_UI_URL || 'http://localhost:8233'
         window.open(temporalWebUIUrl, '_blank')
+    }
+
+    const handlePauseSchedule = async () => {
+        try {
+            await temporalApi.pauseSchedule(startNodeScheduleId)
+            await fetchScheduleDetails(startNodeScheduleId)
+            enqueueSnackbar({
+                message: 'Schedule paused',
+                options: {
+                    key: new Date().getTime() + Math.random(),
+                    variant: 'success',
+                    action: (key) => (
+                        <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
+                            <IconX />
+                        </Button>
+                    )
+                }
+            })
+        } catch (error) {
+            enqueueSnackbar({
+                message: `Failed to pause schedule: ${error.response?.data?.message || error.message}`,
+                options: {
+                    key: new Date().getTime() + Math.random(),
+                    variant: 'error',
+                    persist: true,
+                    action: (key) => (
+                        <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
+                            <IconX />
+                        </Button>
+                    )
+                }
+            })
+        }
+    }
+
+    const handleResumeSchedule = async () => {
+        try {
+            await temporalApi.unpauseSchedule(startNodeScheduleId)
+            await fetchScheduleDetails(startNodeScheduleId)
+            enqueueSnackbar({
+                message: 'Schedule resumed',
+                options: {
+                    key: new Date().getTime() + Math.random(),
+                    variant: 'success',
+                    action: (key) => (
+                        <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
+                            <IconX />
+                        </Button>
+                    )
+                }
+            })
+        } catch (error) {
+            enqueueSnackbar({
+                message: `Failed to resume schedule: ${error.response?.data?.message || error.message}`,
+                options: {
+                    key: new Date().getTime() + Math.random(),
+                    variant: 'error',
+                    persist: true,
+                    action: (key) => (
+                        <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
+                            <IconX />
+                        </Button>
+                    )
+                }
+            })
+        }
+    }
+
+    const handleTriggerSchedule = async () => {
+        try {
+            await temporalApi.triggerSchedule(startNodeScheduleId)
+            enqueueSnackbar({
+                message: 'Schedule triggered manually',
+                options: {
+                    key: new Date().getTime() + Math.random(),
+                    variant: 'success',
+                    action: (key) => (
+                        <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
+                            <IconX />
+                        </Button>
+                    )
+                }
+            })
+        } catch (error) {
+            enqueueSnackbar({
+                message: `Failed to trigger schedule: ${error.response?.data?.message || error.message}`,
+                options: {
+                    key: new Date().getTime() + Math.random(),
+                    variant: 'error',
+                    persist: true,
+                    action: (key) => (
+                        <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
+                            <IconX />
+                        </Button>
+                    )
+                }
+            })
+        }
+    }
+
+    const handleStopSchedule = async () => {
+        const confirmPayload = {
+            title: 'Stop Schedule',
+            description: `Stop the schedule "${startNodeScheduleId}"? This will permanently delete it.`,
+            confirmButtonName: 'Stop',
+            cancelButtonName: 'Cancel'
+        }
+        const isConfirmed = await confirm(confirmPayload)
+        if (!isConfirmed) return
+        try {
+            await temporalApi.deleteSchedule(startNodeScheduleId)
+            setNodes((nds) =>
+                nds.map((node) => {
+                    if (node.type === 'temporalStart') {
+                        return {
+                            ...node,
+                            data: {
+                                ...node.data,
+                                scheduleId: undefined
+                            }
+                        }
+                    }
+                    return node
+                })
+            )
+            setScheduleDetails(null)
+            setScheduleAnchorEl(null)
+            if (reactFlowInstance && workflow?.id) {
+                setTimeout(() => {
+                    const rfInstanceObject = reactFlowInstance.toObject()
+                    const flowData = JSON.stringify(rfInstanceObject)
+                    const updateBody = { name: workflowName, flowData }
+                    updateTemporalWorkflowApi.request(workflow.id, updateBody)
+                }, 100)
+            }
+            enqueueSnackbar({
+                message: 'Schedule stopped',
+                options: {
+                    key: new Date().getTime() + Math.random(),
+                    variant: 'success',
+                    action: (key) => (
+                        <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
+                            <IconX />
+                        </Button>
+                    )
+                }
+            })
+        } catch (error) {
+            enqueueSnackbar({
+                message: `Failed to stop schedule: ${error.response?.data?.message || error.message}`,
+                options: {
+                    key: new Date().getTime() + Math.random(),
+                    variant: 'error',
+                    persist: true,
+                    action: (key) => (
+                        <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
+                            <IconX />
+                        </Button>
+                    )
+                }
+            })
+        }
     }
 
     const onNodeClick = useCallback(
@@ -287,7 +482,6 @@ const TemporalCanvas = () => {
     const onNodeDoubleClick = useCallback(
         (event, node) => {
             if (!node || !node.data) return
-
             setConfigDialogProps({
                 node,
                 agentFlows: temporal.agentFlows || [],
@@ -308,21 +502,15 @@ const TemporalCanvas = () => {
             event.preventDefault()
             const reactFlowBounds = reactFlowWrapper.current.getBoundingClientRect()
             let nodeData = event.dataTransfer.getData('application/reactflow')
-
             if (typeof nodeData === 'undefined' || !nodeData) {
                 return
             }
-
             nodeData = JSON.parse(nodeData)
-
             const position = reactFlowInstance.project({
                 x: event.clientX - reactFlowBounds.left - 100,
                 y: event.clientY - reactFlowBounds.top - 50
             })
-
             const existingNodes = reactFlowInstance.getNodes()
-
-            // Only allow one Start node
             if (nodeData.type === 'temporalStart' && existingNodes.find((node) => node.type === 'temporalStart')) {
                 enqueueSnackbar({
                     message: 'Only one Start node is allowed',
@@ -338,9 +526,7 @@ const TemporalCanvas = () => {
                 })
                 return
             }
-
             const newNodeId = `${nodeData.type}_${Date.now()}`
-
             const newNode = {
                 id: newNodeId,
                 type: nodeData.type,
@@ -352,7 +538,6 @@ const TemporalCanvas = () => {
                     selected: true
                 }
             }
-
             setSelectedNode(newNode)
             setNodes((nds) => {
                 return nds
@@ -425,9 +610,6 @@ const TemporalCanvas = () => {
         dispatch({ type: SET_TEMPORAL_DIRTY })
     }
 
-    // ==============================|| useEffect ||============================== //
-
-    // Get specific workflow successful
     useEffect(() => {
         if (getTemporalWorkflowApi.data) {
             const workflowData = getTemporalWorkflowApi.data
@@ -442,7 +624,6 @@ const TemporalCanvas = () => {
         }
     }, [getTemporalWorkflowApi.data, getTemporalWorkflowApi.error])
 
-    // Create new workflow successful
     useEffect(() => {
         if (createTemporalWorkflowApi.data) {
             const newWorkflow = createTemporalWorkflowApi.data
@@ -455,7 +636,6 @@ const TemporalCanvas = () => {
         }
     }, [createTemporalWorkflowApi.data, createTemporalWorkflowApi.error])
 
-    // Update workflow successful
     useEffect(() => {
         if (updateTemporalWorkflowApi.data) {
             setWorkflow(updateTemporalWorkflowApi.data)
@@ -466,21 +646,24 @@ const TemporalCanvas = () => {
         }
     }, [updateTemporalWorkflowApi.data, updateTemporalWorkflowApi.error])
 
-    // Get AgentFlows for dropdown
     useEffect(() => {
         if (getAgentFlowsApi.data) {
             dispatch({ type: SET_TEMPORAL_AGENTFLOWS, agentFlows: getAgentFlowsApi.data })
         }
     }, [getAgentFlowsApi.data])
 
-    // Get API keys for dropdown
     useEffect(() => {
         if (getApiKeysApi.data) {
             setApiKeys(getApiKeysApi.data)
         }
     }, [getApiKeysApi.data])
 
-    // Initialization
+    useEffect(() => {
+        if (startNodeScheduleId && workflowId) {
+            fetchScheduleDetails(startNodeScheduleId)
+        }
+    }, [startNodeScheduleId, workflowId])
+
     useEffect(() => {
         if (workflowId) {
             getTemporalWorkflowApi.request(workflowId)
@@ -493,14 +676,8 @@ const TemporalCanvas = () => {
                 workflow: { name: 'Untitled Workflow' }
             })
         }
-
-        // Fetch AgentFlows for dropdown
         getAgentFlowsApi.request()
-
-        // Fetch API keys for dropdown
         getApiKeysApi.request()
-
-        // Clear dirty state before leaving
         return () => {
             setTimeout(() => dispatch({ type: REMOVE_TEMPORAL_DIRTY }), 0)
         }
@@ -521,7 +698,6 @@ const TemporalCanvas = () => {
                     }}
                 >
                     <Toolbar sx={{ justifyContent: 'space-between' }}>
-                        {/* Left section */}
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                             <IconButton onClick={() => navigate('/temporalflows')}>
                                 <IconArrowLeft />
@@ -544,10 +720,16 @@ const TemporalCanvas = () => {
                                 }}
                             />
                             <Chip label='TEMPORAL' size='small' color='primary' />
+                            {hasScheduleId && (
+                                <Chip
+                                    label={isSchedulePaused ? 'Paused' : 'Scheduled'}
+                                    size='small'
+                                    color={isSchedulePaused ? 'warning' : 'success'}
+                                    sx={{ ml: 0.5 }}
+                                />
+                            )}
                             {temporal.isDirty && <Chip label='Unsaved' size='small' color='warning' />}
                         </Box>
-
-                        {/* Right section */}
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <Tooltip title='View in Temporal UI'>
                                 <Button
@@ -559,18 +741,54 @@ const TemporalCanvas = () => {
                                     Temporal UI
                                 </Button>
                             </Tooltip>
-                            <Tooltip title='Run Workflow'>
+                            <Tooltip title={runButtonLabel}>
                                 <Button
                                     variant='outlined'
-                                    color='success'
-                                    startIcon={<IconPlayerPlay size={18} />}
+                                    color={startNodeTriggerMode === 'scheduled' ? 'warning' : 'success'}
+                                    startIcon={
+                                        startNodeTriggerMode === 'scheduled' ? <IconClock size={18} /> : <IconPlayerPlay size={18} />
+                                    }
                                     onClick={handleStartWorkflow}
                                     disabled={!workflow?.id}
                                     sx={{ borderRadius: 2 }}
                                 >
-                                    Run
+                                    {runButtonLabel}
                                 </Button>
                             </Tooltip>
+                            {hasScheduleId && (
+                                <>
+                                    <Tooltip title='Schedule Actions'>
+                                        <IconButton onClick={(e) => setScheduleAnchorEl(e.currentTarget)} sx={{ borderRadius: 2 }}>
+                                            <IconDots size={18} />
+                                        </IconButton>
+                                    </Tooltip>
+                                    <Menu
+                                        anchorEl={scheduleAnchorEl}
+                                        open={!!scheduleAnchorEl}
+                                        onClose={() => setScheduleAnchorEl(null)}
+                                        MenuListProps={{ disablePadding: true }}
+                                        sx={{ mt: -1 }}
+                                    >
+                                        <MenuItem onClick={isSchedulePaused ? handleResumeSchedule : handlePauseSchedule}>
+                                            {isSchedulePaused ? (
+                                                <IconCircleCheck size={16} style={{ marginRight: 8 }} />
+                                            ) : (
+                                                <IconCircleOff size={16} style={{ marginRight: 8 }} />
+                                            )}
+                                            {isSchedulePaused ? 'Resume' : 'Pause'}
+                                        </MenuItem>
+                                        <MenuItem onClick={handleTriggerSchedule}>
+                                            <IconPlayerPlay size={16} style={{ marginRight: 8 }} />
+                                            Trigger Now
+                                        </MenuItem>
+                                        <Divider />
+                                        <MenuItem onClick={handleStopSchedule} sx={{ color: 'error.main' }}>
+                                            <IconCircleOff size={16} style={{ marginRight: 8 }} />
+                                            Stop Schedule
+                                        </MenuItem>
+                                    </Menu>
+                                </>
+                            )}
                             <Tooltip title='Save Workflow'>
                                 <Button
                                     variant='contained'
@@ -651,5 +869,4 @@ const TemporalCanvas = () => {
         </>
     )
 }
-
 export default TemporalCanvas
