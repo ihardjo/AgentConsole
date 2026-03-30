@@ -122,8 +122,8 @@ const TemporalNodeConfigDialog = ({ open, onClose, dialogProps, onSave }) => {
                             </>
                         )}
                         {formData.scheduleId && formData.triggerMode === 'scheduled' && (
-                            <Alert severity='warning' sx={{ mt: 1 }}>
-                                Schedule changes require clicking Reschedule to take effect.
+                            <Alert severity='info' sx={{ mt: 1 }}>
+                                Click Reschedule in the toolbar to apply changes. Your workflow will be saved automatically.
                             </Alert>
                         )}
                         {formData.triggerMode === 'manual' && (

@@ -21,6 +21,7 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import { IconX } from '@tabler/icons-react'
 
 import chatflowsApi from '@/api/chatflows'
+import temporalApi from '@/api/temporal'
 
 import useApi from '@/hooks/useApi'
 import useConfirm from '@/hooks/useConfirm'
@@ -74,7 +75,16 @@ const StyledMenu = styled((props) => (
     }
 }))
 
-export default function FlowListMenu({ chatflow, isAgentCanvas, isAgentflowV2, setError, updateFlowsApi, currentPage, pageLimit }) {
+export default function FlowListMenu({
+    chatflow,
+    isAgentCanvas,
+    isAgentflowV2,
+    isTemporalCanvas,
+    setError,
+    updateFlowsApi,
+    currentPage,
+    pageLimit
+}) {
     const { confirm } = useConfirm()
     const dispatch = useDispatch()
     const updateChatflowApi = useApi(chatflowsApi.updateChatflow)
@@ -100,7 +110,7 @@ export default function FlowListMenu({ chatflow, isAgentCanvas, isAgentflowV2, s
     const [exportTemplateDialogOpen, setExportTemplateDialogOpen] = useState(false)
     const [exportTemplateDialogProps, setExportTemplateDialogProps] = useState({})
 
-    const title = isAgentCanvas ? 'Agents' : 'Chatflow'
+    const title = isTemporalCanvas ? 'Workflow' : isAgentCanvas ? 'Agents' : 'Chatflow'
 
     const refreshFlows = async () => {
         try {
@@ -183,12 +193,18 @@ export default function FlowListMenu({ chatflow, isAgentCanvas, isAgentflowV2, s
             chatflow
         }
         try {
-            await updateChatflowApi.request(chatflow.id, updateBody)
+            if (isTemporalCanvas) {
+                await temporalApi.updateTemporalWorkflow(chatflow.id, updateBody)
+            } else {
+                await updateChatflowApi.request(chatflow.id, updateBody)
+            }
             const params = {
                 page: currentPage,
                 limit: pageLimit
             }
-            if (isAgentCanvas && isAgentflowV2) {
+            if (isTemporalCanvas) {
+                await updateFlowsApi.request(params)
+            } else if (isAgentCanvas && isAgentflowV2) {
                 await updateFlowsApi.request('AGENTFLOW', params)
             } else if (isAgentCanvas) {
                 await updateFlowsApi.request('MULTIAGENT', params)
@@ -272,12 +288,18 @@ export default function FlowListMenu({ chatflow, isAgentCanvas, isAgentflowV2, s
 
         if (isConfirmed) {
             try {
-                await chatflowsApi.deleteChatflow(chatflow.id)
+                if (isTemporalCanvas) {
+                    await temporalApi.deleteTemporalWorkflow(chatflow.id)
+                } else {
+                    await chatflowsApi.deleteChatflow(chatflow.id)
+                }
                 const params = {
                     page: currentPage,
                     limit: pageLimit
                 }
-                if (isAgentCanvas && isAgentflowV2) {
+                if (isTemporalCanvas) {
+                    await updateFlowsApi.request(params)
+                } else if (isAgentCanvas && isAgentflowV2) {
                     await updateFlowsApi.request('AGENTFLOW', params)
                 } else if (isAgentCanvas) {
                     await updateFlowsApi.request('MULTIAGENT', params)
@@ -362,77 +384,81 @@ export default function FlowListMenu({ chatflow, isAgentCanvas, isAgentflowV2, s
                 onClose={handleClose}
             >
                 <PermissionMenuItem
-                    permissionId={isAgentCanvas ? 'agentflows:update' : 'chatflows:update'}
+                    permissionId={isTemporalCanvas ? 'temporalflows:update' : isAgentCanvas ? 'agentflows:update' : 'chatflows:update'}
                     onClick={handleFlowRename}
                     disableRipple
                 >
                     <EditIcon />
                     Rename
                 </PermissionMenuItem>
-                <PermissionMenuItem
-                    permissionId={isAgentCanvas ? 'agentflows:duplicate' : 'chatflows:duplicate'}
-                    onClick={handleDuplicate}
-                    disableRipple
-                >
-                    <FileCopyIcon />
-                    Duplicate
-                </PermissionMenuItem>
-                <PermissionMenuItem
-                    permissionId={isAgentCanvas ? 'agentflows:export' : 'chatflows:export'}
-                    onClick={handleExport}
-                    disableRipple
-                >
-                    <FileDownloadIcon />
-                    Export
-                </PermissionMenuItem>
-                <PermissionMenuItem permissionId={'templates:flowexport'} onClick={handleExportTemplate} disableRipple>
-                    <ExportTemplateOutlinedIcon />
-                    Save As Template
-                </PermissionMenuItem>
+                {!isTemporalCanvas && (
+                    <>
+                        <PermissionMenuItem
+                            permissionId={isAgentCanvas ? 'agentflows:duplicate' : 'chatflows:duplicate'}
+                            onClick={handleDuplicate}
+                            disableRipple
+                        >
+                            <FileCopyIcon />
+                            Duplicate
+                        </PermissionMenuItem>
+                        <PermissionMenuItem
+                            permissionId={isAgentCanvas ? 'agentflows:export' : 'chatflows:export'}
+                            onClick={handleExport}
+                            disableRipple
+                        >
+                            <FileDownloadIcon />
+                            Export
+                        </PermissionMenuItem>
+                        <PermissionMenuItem permissionId={'templates:flowexport'} onClick={handleExportTemplate} disableRipple>
+                            <ExportTemplateOutlinedIcon />
+                            Save As Template
+                        </PermissionMenuItem>
+                        <Divider sx={{ my: 0.5 }} />
+                        <PermissionMenuItem
+                            permissionId={isAgentCanvas ? 'agentflows:config' : 'chatflows:config'}
+                            onClick={handleFlowStarterPrompts}
+                            disableRipple
+                        >
+                            <PictureInPictureAltIcon />
+                            Starter Prompts
+                        </PermissionMenuItem>
+                        <PermissionMenuItem
+                            permissionId={isAgentCanvas ? 'agentflows:config' : 'chatflows:config'}
+                            onClick={handleFlowChatFeedback}
+                            disableRipple
+                        >
+                            <ThumbsUpDownOutlinedIcon />
+                            Chat Feedback
+                        </PermissionMenuItem>
+                        <PermissionMenuItem
+                            permissionId={isAgentCanvas ? 'agentflows:domains' : 'chatflows:domains'}
+                            onClick={handleAllowedDomains}
+                            disableRipple
+                        >
+                            <VpnLockOutlinedIcon />
+                            Allowed Domains
+                        </PermissionMenuItem>
+                        <PermissionMenuItem
+                            permissionId={isAgentCanvas ? 'agentflows:config' : 'chatflows:config'}
+                            onClick={handleSpeechToText}
+                            disableRipple
+                        >
+                            <MicNoneOutlinedIcon />
+                            Speech To Text
+                        </PermissionMenuItem>
+                        <PermissionMenuItem
+                            permissionId={isAgentCanvas ? 'agentflows:update' : 'chatflows:update'}
+                            onClick={handleFlowCategory}
+                            disableRipple
+                        >
+                            <FileCategoryIcon />
+                            Update Category
+                        </PermissionMenuItem>
+                    </>
+                )}
                 <Divider sx={{ my: 0.5 }} />
                 <PermissionMenuItem
-                    permissionId={isAgentCanvas ? 'agentflows:config' : 'chatflows:config'}
-                    onClick={handleFlowStarterPrompts}
-                    disableRipple
-                >
-                    <PictureInPictureAltIcon />
-                    Starter Prompts
-                </PermissionMenuItem>
-                <PermissionMenuItem
-                    permissionId={isAgentCanvas ? 'agentflows:config' : 'chatflows:config'}
-                    onClick={handleFlowChatFeedback}
-                    disableRipple
-                >
-                    <ThumbsUpDownOutlinedIcon />
-                    Chat Feedback
-                </PermissionMenuItem>
-                <PermissionMenuItem
-                    permissionId={isAgentCanvas ? 'agentflows:domains' : 'chatflows:domains'}
-                    onClick={handleAllowedDomains}
-                    disableRipple
-                >
-                    <VpnLockOutlinedIcon />
-                    Allowed Domains
-                </PermissionMenuItem>
-                <PermissionMenuItem
-                    permissionId={isAgentCanvas ? 'agentflows:config' : 'chatflows:config'}
-                    onClick={handleSpeechToText}
-                    disableRipple
-                >
-                    <MicNoneOutlinedIcon />
-                    Speech To Text
-                </PermissionMenuItem>
-                <PermissionMenuItem
-                    permissionId={isAgentCanvas ? 'agentflows:update' : 'chatflows:update'}
-                    onClick={handleFlowCategory}
-                    disableRipple
-                >
-                    <FileCategoryIcon />
-                    Update Category
-                </PermissionMenuItem>
-                <Divider sx={{ my: 0.5 }} />
-                <PermissionMenuItem
-                    permissionId={isAgentCanvas ? 'agentflows:delete' : 'chatflows:delete'}
+                    permissionId={isTemporalCanvas ? 'temporalflows:delete' : isAgentCanvas ? 'agentflows:delete' : 'chatflows:delete'}
                     onClick={handleDelete}
                     disableRipple
                 >
@@ -495,6 +521,7 @@ FlowListMenu.propTypes = {
     chatflow: PropTypes.object,
     isAgentCanvas: PropTypes.bool,
     isAgentflowV2: PropTypes.bool,
+    isTemporalCanvas: PropTypes.bool,
     setError: PropTypes.func,
     updateFlowsApi: PropTypes.object,
     currentPage: PropTypes.number,
