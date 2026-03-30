@@ -4,9 +4,21 @@ import { InternalFlowiseError } from '../../errors/internalFlowiseError'
 import temporalService from '../../services/temporal'
 import { checkTemporalHealth } from '../../services/temporal/client'
 
-/**
- * Get all Temporal workflows in the workspace
- */
+import logger from '../../utils/logger'
+
+function extractFlowIdFromScheduleId(scheduleId: string): string | null {
+    const match = scheduleId.match(/^schedule-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/)
+    return match ? match[1] : null
+}
+
+async function verifyScheduleOwnership(scheduleId: string, workspaceId: string): Promise<void> {
+    const flowId = extractFlowIdFromScheduleId(scheduleId)
+    if (!flowId) {
+        throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'Invalid schedule ID format')
+    }
+    await temporalService.getWorkflowById(flowId, workspaceId)
+}
+
 const getAllWorkflows = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const workspaceId = req.user?.activeWorkspaceId
@@ -21,9 +33,6 @@ const getAllWorkflows = async (req: Request, res: Response, next: NextFunction) 
     }
 }
 
-/**
- * Get a single Temporal workflow by ID
- */
 const getWorkflowById = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { id } = req.params
@@ -43,9 +52,6 @@ const getWorkflowById = async (req: Request, res: Response, next: NextFunction) 
     }
 }
 
-/**
- * Create a new Temporal workflow
- */
 const createWorkflow = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { name, flowData } = req.body
@@ -70,9 +76,6 @@ const createWorkflow = async (req: Request, res: Response, next: NextFunction) =
     }
 }
 
-/**
- * Update an existing Temporal workflow
- */
 const updateWorkflow = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { id } = req.params
@@ -94,9 +97,6 @@ const updateWorkflow = async (req: Request, res: Response, next: NextFunction) =
     }
 }
 
-/**
- * Delete a Temporal workflow
- */
 const deleteWorkflow = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { id } = req.params
@@ -116,9 +116,6 @@ const deleteWorkflow = async (req: Request, res: Response, next: NextFunction) =
     }
 }
 
-/**
- * Start a Temporal workflow execution
- */
 const startWorkflow = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { id } = req.params
@@ -138,16 +135,12 @@ const startWorkflow = async (req: Request, res: Response, next: NextFunction) =>
             workspaceId,
             input
         })
-
         return res.json(result)
     } catch (error) {
         next(error)
     }
 }
 
-/**
- * Send a signal to a running Temporal workflow
- */
 const sendSignal = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { workflowId } = req.params
@@ -172,9 +165,6 @@ const sendSignal = async (req: Request, res: Response, next: NextFunction) => {
     }
 }
 
-/**
- * Get the status of a Temporal workflow execution
- */
 const getWorkflowStatus = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { workflowId } = req.params
@@ -189,9 +179,6 @@ const getWorkflowStatus = async (req: Request, res: Response, next: NextFunction
     }
 }
 
-/**
- * Get all AgentFlows in the workspace (for dropdown)
- */
 const getWorkspaceAgentFlows = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const workspaceId = req.user?.activeWorkspaceId
@@ -206,9 +193,6 @@ const getWorkspaceAgentFlows = async (req: Request, res: Response, next: NextFun
     }
 }
 
-/**
- * Health check for Temporal server connection
- */
 const healthCheck = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const health = await checkTemporalHealth()
@@ -225,6 +209,115 @@ const healthCheck = async (req: Request, res: Response, next: NextFunction) => {
     }
 }
 
+const getScheduleDetails = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { scheduleId } = req.params
+        if (!scheduleId) {
+            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'Schedule ID is required')
+        }
+
+        const workspaceId = req.user?.activeWorkspaceId
+        if (!workspaceId) {
+            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'Workspace ID is required')
+        }
+
+        await verifyScheduleOwnership(scheduleId, workspaceId)
+
+        const details = await temporalService.getScheduleDetails(scheduleId)
+        return res.json(details)
+    } catch (error) {
+        if (error instanceof InternalFlowiseError && error.statusCode === StatusCodes.NOT_FOUND) {
+            return res.status(StatusCodes.NOT_FOUND).json({ error: error.message })
+        }
+        next(error)
+    }
+}
+
+const pauseSchedule = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { scheduleId } = req.params
+        if (!scheduleId) {
+            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'Schedule ID is required')
+        }
+
+        const workspaceId = req.user?.activeWorkspaceId
+        if (!workspaceId) {
+            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'Workspace ID is required')
+        }
+
+        await verifyScheduleOwnership(scheduleId, workspaceId)
+
+        const { reason } = req.body || {}
+        await temporalService.pauseSchedule(scheduleId, reason)
+        return res.json({ success: true })
+    } catch (error) {
+        next(error)
+    }
+}
+
+const unpauseSchedule = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { scheduleId } = req.params
+        if (!scheduleId) {
+            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'Schedule ID is required')
+        }
+
+        const workspaceId = req.user?.activeWorkspaceId
+        if (!workspaceId) {
+            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'Workspace ID is required')
+        }
+
+        await verifyScheduleOwnership(scheduleId, workspaceId)
+
+        await temporalService.unpauseSchedule(scheduleId)
+        return res.json({ success: true })
+    } catch (error) {
+        next(error)
+    }
+}
+
+const triggerSchedule = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { scheduleId } = req.params
+        if (!scheduleId) {
+            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'Schedule ID is required')
+        }
+
+        const workspaceId = req.user?.activeWorkspaceId
+        if (!workspaceId) {
+            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'Workspace ID is required')
+        }
+
+        await verifyScheduleOwnership(scheduleId, workspaceId)
+
+        await temporalService.triggerSchedule(scheduleId)
+        return res.json({ success: true })
+    } catch (error) {
+        next(error)
+    }
+}
+
+const deleteSchedule = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { scheduleId } = req.params
+        if (!scheduleId) {
+            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'Schedule ID is required')
+        }
+
+        const workspaceId = req.user?.activeWorkspaceId
+        if (!workspaceId) {
+            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'Workspace ID is required')
+        }
+
+        await verifyScheduleOwnership(scheduleId, workspaceId)
+
+        await temporalService.deleteSchedule(scheduleId)
+        return res.json({ success: true })
+    } catch (error) {
+        next(error)
+    }
+}
+
 export default {
     getAllWorkflows,
     getWorkflowById,
@@ -235,5 +328,10 @@ export default {
     sendSignal,
     getWorkflowStatus,
     getWorkspaceAgentFlows,
-    healthCheck
+    healthCheck,
+    getScheduleDetails,
+    pauseSchedule,
+    unpauseSchedule,
+    triggerSchedule,
+    deleteSchedule
 }

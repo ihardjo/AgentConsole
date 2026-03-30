@@ -29,7 +29,11 @@ const TEMPORAL_NODES = [
         icon: IconPlayerPlay,
         color: '#4CAF50',
         defaultData: {
-            inputVariables: []
+            inputVariables: [],
+            triggerMode: 'manual',
+            scheduleInterval: '',
+            overlapPolicy: 'SKIP',
+            catchupWindow: ''
         }
     },
     {

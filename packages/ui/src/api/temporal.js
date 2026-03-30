@@ -1,6 +1,5 @@
 import client from './client'
 
-// Temporal Workflow CRUD operations
 const getAllTemporalWorkflows = (params) => client.get('/temporal/workflows', { params })
 
 const getTemporalWorkflow = (id) => client.get(`/temporal/workflows/${id}`)
@@ -11,15 +10,23 @@ const updateTemporalWorkflow = (id, body) => client.put(`/temporal/workflows/${i
 
 const deleteTemporalWorkflow = (id) => client.delete(`/temporal/workflows/${id}`)
 
-// Workflow execution operations
 const startTemporalWorkflow = (id, body) => client.post(`/temporal/workflows/${id}/start`, body)
 
 const sendSignal = (workflowId, body) => client.post(`/temporal/workflows/${workflowId}/signal`, body)
 
 const getWorkflowStatus = (workflowId) => client.get(`/temporal/workflows/${workflowId}/status`)
 
-// Get AgentFlows for dropdown (workspace-scoped)
 const getAgentFlows = () => client.get('/temporal/agentflows')
+
+const getScheduleDetails = (scheduleId) => client.get(`/temporal/schedules/${scheduleId}`)
+
+const pauseSchedule = (scheduleId, body) => client.post(`/temporal/schedules/${scheduleId}/pause`, body)
+
+const unpauseSchedule = (scheduleId) => client.post(`/temporal/schedules/${scheduleId}/unpause`)
+
+const triggerSchedule = (scheduleId) => client.post(`/temporal/schedules/${scheduleId}/trigger`)
+
+const deleteSchedule = (scheduleId) => client.delete(`/temporal/schedules/${scheduleId}`)
 
 export default {
     getAllTemporalWorkflows,
@@ -30,5 +37,10 @@ export default {
     startTemporalWorkflow,
     sendSignal,
     getWorkflowStatus,
-    getAgentFlows
+    getAgentFlows,
+    getScheduleDetails,
+    pauseSchedule,
+    unpauseSchedule,
+    triggerSchedule,
+    deleteSchedule
 }
