@@ -7,9 +7,71 @@ import logger from '../../utils/logger'
 import { getTemporalClient, getTaskQueue, getTemporalWebUIUrl } from './client'
 import config from '../../utils/config'
 
-/**
- * Get all Temporal workflows for a workspace
- */
+export interface ScheduleConfig {
+    triggerMode: 'manual' | 'scheduled'
+    scheduleInterval: string
+    overlapPolicy: 'SKIP' | 'ALLOW_ALL' | 'BUFFER_ONE' | 'CANCEL_OTHER'
+    catchupWindow: string
+    scheduleId?: string
+}
+
+export interface CreateScheduleResult {
+    scheduleId: string
+    triggerMode: 'scheduled'
+    scheduleInterval: string
+    overlapPolicy: string
+    temporalUrl: string
+}
+
+export interface ScheduleDetailsResult {
+    scheduleId: string
+    status: { paused: boolean; notes: string }
+    spec: Record<string, any>
+    nextActionTimes: Date[]
+    recentActions: Record<string, any>[]
+    overlapPolicy: string
+    catchupWindow: string
+}
+
+export type OverlapPolicy = 'SKIP' | 'ALLOW_ALL' | 'BUFFER_ONE' | 'CANCEL_OTHER'
+
+export function parseDurationToMs(interval: string): number {
+    const match = interval.match(/^(\d+)(s|m|h|d)$/)
+    if (!match) {
+        throw new InternalFlowiseError(
+            StatusCodes.BAD_REQUEST,
+            `Invalid interval format: '${interval}'. Expected format: <number><s|m|h|d> (e.g., 30s, 10m, 1h, 1d)`
+        )
+    }
+    const value = parseInt(match[1], 10)
+    if (value === 0) {
+        throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'Interval must be greater than 0')
+    }
+    const unit = match[2]
+    switch (unit) {
+        case 's':
+            return value * 1000
+        case 'm':
+            return value * 60 * 1000
+        case 'h':
+            return value * 60 * 60 * 1000
+        case 'd':
+            return value * 24 * 60 * 60 * 1000
+        default:
+            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, `Unknown time unit: ${unit}`)
+    }
+}
+
+function getStartNodeFromFlowData(flowData: string): { type: string; data: Record<string, any> } | null {
+    try {
+        const parsed = JSON.parse(flowData)
+        const nodes = parsed.nodes || []
+        return nodes.find((n: any) => n.type === 'temporalStart') || null
+    } catch {
+        return null
+    }
+}
+
 const getAllWorkflows = async (workspaceId: string): Promise<ChatFlow[]> => {
     try {
         const appServer = getRunningExpressApp()
@@ -31,9 +93,6 @@ const getAllWorkflows = async (workspaceId: string): Promise<ChatFlow[]> => {
     }
 }
 
-/**
- * Get a single Temporal workflow by ID
- */
 const getWorkflowById = async (id: string, workspaceId: string): Promise<ChatFlow> => {
     try {
         const appServer = getRunningExpressApp()
@@ -65,9 +124,6 @@ export interface CreateWorkflowParams {
     workspaceId: string
 }
 
-/**
- * Create a new Temporal workflow
- */
 const createWorkflow = async (params: CreateWorkflowParams): Promise<ChatFlow> => {
     try {
         const appServer = getRunningExpressApp()
@@ -93,9 +149,6 @@ export interface UpdateWorkflowParams {
     flowData?: string
 }
 
-/**
- * Update an existing Temporal workflow
- */
 const updateWorkflow = async (id: string, workspaceId: string, params: UpdateWorkflowParams): Promise<ChatFlow> => {
     try {
         const appServer = getRunningExpressApp()
@@ -119,13 +172,22 @@ const updateWorkflow = async (id: string, workspaceId: string, params: UpdateWor
     }
 }
 
-/**
- * Delete a Temporal workflow
- */
 const deleteWorkflow = async (id: string, workspaceId: string): Promise<void> => {
     try {
         const appServer = getRunningExpressApp()
         const workflow = await getWorkflowById(id, workspaceId)
+
+        const startNode = getStartNodeFromFlowData(workflow.flowData)
+        if (startNode?.data?.scheduleId) {
+            try {
+                const client = await getTemporalClient()
+                const handle = client.schedule.getHandle(startNode.data.scheduleId)
+                await handle.delete()
+                logger.info(`Deleted Temporal schedule: ${startNode.data.scheduleId} (workflow deletion)`)
+            } catch (scheduleError) {
+                logger.warn(`Failed to delete schedule ${startNode.data.scheduleId}: ${getErrorMessage(scheduleError)}`)
+            }
+        }
 
         await appServer.AppDataSource.getRepository(ChatFlow).delete({ id: workflow.id })
     } catch (error) {
@@ -149,18 +211,25 @@ export interface StartWorkflowResult {
     temporalUrl: string
 }
 
-/**
- * Start a Temporal workflow execution
- */
-const startWorkflow = async (params: StartWorkflowParams): Promise<StartWorkflowResult> => {
+export type StartOrScheduleResult = StartWorkflowResult | CreateScheduleResult
+
+const startWorkflow = async (params: StartWorkflowParams): Promise<StartOrScheduleResult> => {
     try {
-        // Verify the workflow exists
         const workflow = await getWorkflowById(params.flowId, params.workspaceId)
+
+        const startNode = getStartNodeFromFlowData(workflow.flowData)
+        const triggerMode = startNode?.data?.triggerMode || 'manual'
+
+        if (triggerMode === 'scheduled') {
+            return createSchedule({
+                flowId: params.flowId,
+                workspaceId: params.workspaceId,
+                input: params.input
+            })
+        }
 
         const client = await getTemporalClient()
         const taskQueue = getTaskQueue()
-
-        // Generate a unique workflow ID
         const workflowId = `durable-${params.flowId}-${Date.now()}`
 
         const handle = await client.workflow.start('durableWorkflowExecutor', {
@@ -199,9 +268,6 @@ export interface SendSignalParams {
     payload?: any
 }
 
-/**
- * Send a signal to a running Temporal workflow
- */
 const sendSignal = async (params: SendSignalParams): Promise<void> => {
     try {
         const client = await getTemporalClient()
@@ -224,9 +290,6 @@ export interface WorkflowStatus {
     temporalUrl: string
 }
 
-/**
- * Get the status of a Temporal workflow execution
- */
 const getWorkflowStatus = async (workflowId: string): Promise<WorkflowStatus> => {
     try {
         const client = await getTemporalClient()
@@ -249,9 +312,6 @@ const getWorkflowStatus = async (workflowId: string): Promise<WorkflowStatus> =>
     }
 }
 
-/**
- * Get all AgentFlows in a workspace (for the AgentFlowCall node dropdown)
- */
 const getWorkspaceAgentFlows = async (workspaceId: string): Promise<{ id: string; name: string }[]> => {
     try {
         const appServer = getRunningExpressApp()
@@ -278,6 +338,158 @@ const getWorkspaceAgentFlows = async (workspaceId: string): Promise<{ id: string
     }
 }
 
+const createSchedule = async (params: {
+    flowId: string
+    workspaceId: string
+    input: Record<string, any>
+}): Promise<CreateScheduleResult> => {
+    try {
+        const workflow = await getWorkflowById(params.flowId, params.workspaceId)
+
+        const startNode = getStartNodeFromFlowData(workflow.flowData)
+        if (!startNode) {
+            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'No Start node found in workflow')
+        }
+
+        const scheduleInterval = startNode.data.scheduleInterval || '1h'
+        const overlapPolicy = startNode.data.overlapPolicy || 'SKIP'
+        const catchupWindow = startNode.data.catchupWindow || ''
+
+        parseDurationToMs(scheduleInterval)
+
+        const client = await getTemporalClient()
+        const taskQueue = getTaskQueue()
+        const scheduleId = `schedule-${params.flowId}-${Date.now()}`
+
+        const scheduleSpec: Record<string, any> = {
+            intervals: [{ every: scheduleInterval }]
+        }
+
+        const policies: Record<string, any> = {
+            overlap: overlapPolicy
+        }
+        if (catchupWindow) {
+            policies.catchupWindow = catchupWindow
+        }
+
+        await client.schedule.create({
+            scheduleId,
+            action: {
+                type: 'startWorkflow',
+                workflowType: 'durableWorkflowExecutor',
+                taskQueue,
+                args: [
+                    {
+                        flowId: params.flowId,
+                        workspaceId: params.workspaceId,
+                        input: params.input
+                    }
+                ]
+            },
+            spec: scheduleSpec,
+            policies
+        })
+
+        const updatedFlowData = JSON.parse(workflow.flowData)
+        const startNodeIndex = updatedFlowData.nodes.findIndex((n: any) => n.type === 'temporalStart')
+        if (startNodeIndex !== -1) {
+            updatedFlowData.nodes[startNodeIndex].data.scheduleId = scheduleId
+        }
+        const appServer = getRunningExpressApp()
+        workflow.flowData = JSON.stringify(updatedFlowData)
+        await appServer.AppDataSource.getRepository(ChatFlow).save(workflow)
+
+        logger.info(`Created Temporal schedule: ${scheduleId} (interval: ${scheduleInterval})`)
+
+        return {
+            scheduleId,
+            triggerMode: 'scheduled',
+            scheduleInterval,
+            overlapPolicy,
+            temporalUrl: getTemporalWebUIUrl(scheduleId)
+        }
+    } catch (error) {
+        if (error instanceof InternalFlowiseError) throw error
+        throw new InternalFlowiseError(
+            StatusCodes.INTERNAL_SERVER_ERROR,
+            `Error: temporalService.createSchedule - ${getErrorMessage(error)}`
+        )
+    }
+}
+
+function throwScheduleError(operation: string, scheduleId: string, error: unknown): never {
+    const msg = getErrorMessage(error)
+    if (msg.toLowerCase().includes('not found') || (error as any)?.statusCode === 404) {
+        throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Schedule ${scheduleId} not found`)
+    }
+    throw new InternalFlowiseError(StatusCodes.INTERNAL_SERVER_ERROR, `Error: temporalService.${operation} - ${msg}`)
+}
+
+const getScheduleDetails = async (scheduleId: string): Promise<ScheduleDetailsResult> => {
+    try {
+        const client = await getTemporalClient()
+        const handle = client.schedule.getHandle(scheduleId)
+        const description: any = await handle.describe()
+
+        return {
+            scheduleId,
+            status: description.status ?? { paused: false, notes: '' },
+            spec: description.spec ?? {},
+            nextActionTimes: description.info?.nextActionTimes || [],
+            recentActions: description.info?.recentActions || [],
+            overlapPolicy: description.policy?.overlap || 'SKIP',
+            catchupWindow: description.policy?.catchupWindow || ''
+        }
+    } catch (error) {
+        if (error instanceof InternalFlowiseError) throw error
+        throwScheduleError('getScheduleDetails', scheduleId, error)
+    }
+}
+
+const pauseSchedule = async (scheduleId: string, reason?: string): Promise<void> => {
+    try {
+        const client = await getTemporalClient()
+        const handle = client.schedule.getHandle(scheduleId)
+        await handle.pause(reason || 'Paused by user')
+        logger.info(`Paused Temporal schedule: ${scheduleId}`)
+    } catch (error) {
+        throwScheduleError('pauseSchedule', scheduleId, error)
+    }
+}
+
+const unpauseSchedule = async (scheduleId: string): Promise<void> => {
+    try {
+        const client = await getTemporalClient()
+        const handle = client.schedule.getHandle(scheduleId)
+        await handle.unpause()
+        logger.info(`Unpaused Temporal schedule: ${scheduleId}`)
+    } catch (error) {
+        throwScheduleError('unpauseSchedule', scheduleId, error)
+    }
+}
+
+const triggerSchedule = async (scheduleId: string): Promise<void> => {
+    try {
+        const client = await getTemporalClient()
+        const handle = client.schedule.getHandle(scheduleId)
+        await handle.trigger()
+        logger.info(`Triggered Temporal schedule: ${scheduleId}`)
+    } catch (error) {
+        throwScheduleError('triggerSchedule', scheduleId, error)
+    }
+}
+
+const deleteSchedule = async (scheduleId: string): Promise<void> => {
+    try {
+        const client = await getTemporalClient()
+        const handle = client.schedule.getHandle(scheduleId)
+        await handle.delete()
+        logger.info(`Deleted Temporal schedule: ${scheduleId}`)
+    } catch (error) {
+        throwScheduleError('deleteSchedule', scheduleId, error)
+    }
+}
+
 export default {
     getAllWorkflows,
     getWorkflowById,
@@ -287,5 +499,11 @@ export default {
     startWorkflow,
     sendSignal,
     getWorkflowStatus,
-    getWorkspaceAgentFlows
+    getWorkspaceAgentFlows,
+    createSchedule,
+    getScheduleDetails,
+    pauseSchedule,
+    unpauseSchedule,
+    triggerSchedule,
+    deleteSchedule
 }

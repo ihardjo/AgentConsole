@@ -5,13 +5,13 @@ import { useSelector } from 'react-redux'
 
 // material-ui
 import { styled, useTheme, alpha, darken, lighten } from '@mui/material/styles'
-import { Box, Typography } from '@mui/material'
+import { Box, Typography, Chip } from '@mui/material'
 
 // project imports
 import MainCard from '@/ui-component/cards/MainCard'
 
 // icons
-import { IconPlayerPlay } from '@tabler/icons-react'
+import { IconPlayerPlay, IconClock } from '@tabler/icons-react'
 
 const CardWrapper = styled(MainCard)(({ theme }) => ({
     background: theme.palette.card.main,
@@ -77,7 +77,18 @@ const StartNode = ({ data }) => {
                     </Box>
                     <Box>
                         <Typography sx={{ fontSize: '0.85rem', fontWeight: 500 }}>{data.label || 'Start'}</Typography>
-                        <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>Workflow Entry</Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
+                            {data.triggerMode === 'scheduled' && data.scheduleInterval ? (
+                                <Chip
+                                    icon={<IconClock size={12} />}
+                                    label={`Every ${data.scheduleInterval}`}
+                                    size='small'
+                                    sx={{ height: 18, fontSize: '0.65rem', '& .MuiChip-icon': { fontSize: 12 } }}
+                                />
+                            ) : (
+                                <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>Manual</Typography>
+                            )}
+                        </Box>
                     </Box>
                 </Box>
 

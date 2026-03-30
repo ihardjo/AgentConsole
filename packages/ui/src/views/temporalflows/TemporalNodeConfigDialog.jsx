@@ -15,11 +15,15 @@ import {
     MenuItem,
     Box,
     Typography,
-    IconButton
+    IconButton,
+    ToggleButtonGroup,
+    ToggleButton,
+    Chip,
+    Alert
 } from '@mui/material'
 
 // icons
-import { IconX } from '@tabler/icons-react'
+import { IconX, IconPlayerPlay, IconClock } from '@tabler/icons-react'
 
 // ==============================|| TEMPORAL NODE CONFIG DIALOG ||============================== //
 
@@ -61,9 +65,72 @@ const TemporalNodeConfigDialog = ({ open, onClose, dialogProps, onSave }) => {
                             value={formData.label || ''}
                             onChange={(e) => handleChange('label', e.target.value)}
                         />
-                        <Typography variant='body2' color='text.secondary'>
-                            Input variables can be defined here. The workflow will receive these as initial parameters.
-                        </Typography>
+                        <Box>
+                            <Typography variant='body2' sx={{ mb: 1, fontWeight: 500 }}>
+                                Trigger Mode
+                            </Typography>
+                            <ToggleButtonGroup
+                                value={formData.triggerMode || 'manual'}
+                                exclusive
+                                onChange={(_, value) => {
+                                    if (value) handleChange('triggerMode', value)
+                                }}
+                                size='small'
+                            >
+                                <ToggleButton value='manual' sx={{ textTransform: 'none' }}>
+                                    <IconPlayerPlay size={16} style={{ marginRight: 6 }} />
+                                    Manual
+                                </ToggleButton>
+                                <ToggleButton value='scheduled' sx={{ textTransform: 'none' }}>
+                                    <IconClock size={16} style={{ marginRight: 6 }} />
+                                    Scheduled
+                                </ToggleButton>
+                            </ToggleButtonGroup>
+                        </Box>
+                        {formData.triggerMode === 'scheduled' && (
+                            <>
+                                <TextField
+                                    label='Schedule Interval'
+                                    fullWidth
+                                    value={formData.scheduleInterval || ''}
+                                    onChange={(e) => handleChange('scheduleInterval', e.target.value)}
+                                    placeholder='e.g., 10m, 1h, 1d'
+                                    helperText='Format: <number><s|m|h|d> — e.g., 30s, 10m, 1h, 1d'
+                                    error={formData.scheduleInterval !== '' && !/^(\d+)(s|m|h|d)$/.test(formData.scheduleInterval)}
+                                />
+                                <FormControl fullWidth>
+                                    <InputLabel>Overlap Policy</InputLabel>
+                                    <Select
+                                        value={formData.overlapPolicy || 'SKIP'}
+                                        label='Overlap Policy'
+                                        onChange={(e) => handleChange('overlapPolicy', e.target.value)}
+                                    >
+                                        <MenuItem value='SKIP'>Skip (default)</MenuItem>
+                                        <MenuItem value='ALLOW_ALL'>Allow All</MenuItem>
+                                        <MenuItem value='BUFFER_ONE'>Buffer One</MenuItem>
+                                        <MenuItem value='CANCEL_OTHER'>Cancel Other</MenuItem>
+                                    </Select>
+                                </FormControl>
+                                <TextField
+                                    label='Catchup Window (optional)'
+                                    fullWidth
+                                    value={formData.catchupWindow || ''}
+                                    onChange={(e) => handleChange('catchupWindow', e.target.value)}
+                                    placeholder='e.g., 5m, 1h'
+                                    helperText='How far back to catch up on missed schedules'
+                                />
+                            </>
+                        )}
+                        {formData.scheduleId && formData.triggerMode === 'scheduled' && (
+                            <Alert severity='warning' sx={{ mt: 1 }}>
+                                Schedule changes require clicking Reschedule to take effect.
+                            </Alert>
+                        )}
+                        {formData.triggerMode === 'manual' && (
+                            <Typography variant='body2' color='text.secondary'>
+                                Input variables can be defined here. The workflow will receive these as initial parameters.
+                            </Typography>
+                        )}
                     </Box>
                 )
 
