@@ -72,19 +72,36 @@ function getStartNodeFromFlowData(flowData: string): { type: string; data: Recor
     }
 }
 
-const getAllWorkflows = async (workspaceId: string): Promise<ChatFlow[]> => {
+const getAllWorkflows = async (
+    workspaceId: string,
+    page: number = -1,
+    limit: number = -1,
+    search?: string
+): Promise<ChatFlow[] | { data: ChatFlow[]; total: number }> => {
     try {
         const appServer = getRunningExpressApp()
-        const workflows = await appServer.AppDataSource.getRepository(ChatFlow).find({
-            where: {
-                type: EnumChatflowType.TEMPORAL,
-                workspaceId
-            },
-            order: {
-                updatedDate: 'DESC'
-            }
-        })
-        return workflows
+        const queryBuilder = appServer.AppDataSource.getRepository(ChatFlow)
+            .createQueryBuilder('chat_flow')
+            .where('chat_flow.type = :type', { type: EnumChatflowType.TEMPORAL })
+            .andWhere('chat_flow.workspaceId = :workspaceId', { workspaceId })
+            .orderBy('chat_flow.updatedDate', 'DESC')
+
+        if (search) {
+            queryBuilder.andWhere('chat_flow.name ILIKE :search', { search: `%${search}%` })
+        }
+
+        if (page > 0 && limit > 0) {
+            queryBuilder.skip((page - 1) * limit)
+            queryBuilder.take(limit)
+        }
+
+        if (page > 0 && limit > 0) {
+            const total = await queryBuilder.getCount()
+            const data = await queryBuilder.getMany()
+            return { data, total }
+        }
+
+        return await queryBuilder.getMany()
     } catch (error) {
         throw new InternalFlowiseError(
             StatusCodes.INTERNAL_SERVER_ERROR,
