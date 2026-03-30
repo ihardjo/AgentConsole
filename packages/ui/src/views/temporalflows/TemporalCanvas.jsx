@@ -255,12 +255,75 @@ const TemporalCanvas = () => {
                 return
             }
         }
+        // Auto-save workflow before schedule creation to ensure server has latest configuration
+        if (reactFlowInstance && startNodeTriggerMode === 'scheduled') {
+            try {
+                const rfInstanceObject = reactFlowInstance.toObject()
+                const flowData = JSON.stringify(rfInstanceObject)
+                const updateBody = { name: workflowName, flowData }
+                await temporalApi.updateTemporalWorkflow(workflow.id, updateBody)
+            } catch (error) {
+                enqueueSnackbar({
+                    message: `Failed to save workflow: ${error.response?.data?.message || error.message}`,
+                    options: {
+                        key: new Date().getTime() + Math.random(),
+                        variant: 'error',
+                        persist: true,
+                        action: (key) => (
+                            <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
+                                <IconX />
+                            </Button>
+                        )
+                    }
+                })
+                return
+            }
+        }
         try {
             const result = await temporalApi.startTemporalWorkflow(workflow.id, {})
             const data = result.data
             let message
             if (data.triggerMode === 'scheduled') {
                 message = `Schedule created: ${data.scheduleId} (every ${data.scheduleInterval})`
+                // Update local React state with the new scheduleId
+                if (data.scheduleId) {
+                    setNodes((nds) =>
+                        nds.map((node) => {
+                            if (node.type === 'temporalStart') {
+                                return {
+                                    ...node,
+                                    data: {
+                                        ...node.data,
+                                        scheduleId: data.scheduleId
+                                    }
+                                }
+                            }
+                            return node
+                        })
+                    )
+                    // Auto-save workflow to persist the new scheduleId
+                    if (reactFlowInstance && workflow?.id) {
+                        setTimeout(() => {
+                            const rfInstanceObject = reactFlowInstance.toObject()
+                            // Update the scheduleId in the flow data before saving
+                            const updatedNodes = rfInstanceObject.nodes.map((node) => {
+                                if (node.type === 'temporalStart') {
+                                    return {
+                                        ...node,
+                                        data: {
+                                            ...node.data,
+                                            scheduleId: data.scheduleId
+                                        }
+                                    }
+                                }
+                                return node
+                            })
+                            const flowData = JSON.stringify({ ...rfInstanceObject, nodes: updatedNodes })
+                            const updateBody = { name: workflowName, flowData }
+                            updateTemporalWorkflowApi.request(workflow.id, updateBody)
+                        }, 100)
+                    }
+                }
             } else {
                 message = `Workflow started: ${data.workflowId}`
             }

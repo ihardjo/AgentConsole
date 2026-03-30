@@ -60,6 +60,7 @@ export const FlowListTable = ({
     setError,
     isAgentCanvas,
     isAgentflowV2,
+    isTemporalCanvas,
     currentPage,
     pageLimit
 }) => {
@@ -86,6 +87,9 @@ export const FlowListTable = ({
     }
 
     const onFlowClick = (row) => {
+        if (isTemporalCanvas) {
+            return `/temporalcanvas/${row.id}`
+        }
         if (!isAgentCanvas) {
             return `/canvas/${row.id}`
         } else {
@@ -410,6 +414,7 @@ export const FlowListTable = ({
                                                     <FlowListMenu
                                                         isAgentCanvas={isAgentCanvas}
                                                         isAgentflowV2={isAgentflowV2}
+                                                        isTemporalCanvas={isTemporalCanvas}
                                                         chatflow={row}
                                                         setError={setError}
                                                         updateFlowsApi={updateFlowsApi}
@@ -440,6 +445,7 @@ FlowListTable.propTypes = {
     setError: PropTypes.func,
     isAgentCanvas: PropTypes.bool,
     isAgentflowV2: PropTypes.bool,
+    isTemporalCanvas: PropTypes.bool,
     currentPage: PropTypes.number,
     pageLimit: PropTypes.number
 }

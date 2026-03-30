@@ -5,6 +5,7 @@ import temporalService from '../../services/temporal'
 import { checkTemporalHealth } from '../../services/temporal/client'
 
 import logger from '../../utils/logger'
+import { getPageAndLimitParams } from '../../utils/pagination'
 
 function extractFlowIdFromScheduleId(scheduleId: string): string | null {
     const match = scheduleId.match(/^schedule-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/)
@@ -26,7 +27,10 @@ const getAllWorkflows = async (req: Request, res: Response, next: NextFunction) 
             throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'Workspace ID is required')
         }
 
-        const workflows = await temporalService.getAllWorkflows(workspaceId)
+        const { page, limit } = getPageAndLimitParams(req)
+        const search = req.query?.search as string | undefined
+
+        const workflows = await temporalService.getAllWorkflows(workspaceId, page, limit, search)
         return res.json(workflows)
     } catch (error) {
         next(error)
