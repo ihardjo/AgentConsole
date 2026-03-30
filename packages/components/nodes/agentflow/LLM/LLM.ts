@@ -2,7 +2,7 @@ import { BaseChatModel } from '@langchain/core/language_models/chat_models'
 import { ICommonObject, IMessage, INode, INodeData, INodeOptionsValue, INodeParams, IServerSideEventStreamer } from '../../../src/Interface'
 import { AIMessageChunk, BaseMessageLike, MessageContentText } from '@langchain/core/messages'
 import { DEFAULT_SUMMARIZER_TEMPLATE } from '../prompt'
-import { AnalyticHandler } from '../../../src/handler'
+import { AnalyticHandler, ILLMMetadata, ITokenUsage } from '../../../src/handler'
 import { ILLMMessage } from '../Interface.Agentflow'
 import {
     addImageArtifactsToMessages,
@@ -470,7 +470,14 @@ class LLM_Agentflow implements INode {
             // Start analytics
             if (analyticHandlers && options.parentTraceIds) {
                 const llmLabel = options?.componentNodes?.[model]?.label || model
-                llmIds = await analyticHandlers.onLLMStart(llmLabel, messages, options.parentTraceIds)
+                const llmMetadata: ILLMMetadata = {
+                    model: modelConfig?.modelName || modelConfig?.model || model,
+                    modelParameters: {
+                        temperature: modelConfig?.temperature,
+                        maxTokens: modelConfig?.maxTokens
+                    }
+                }
+                llmIds = await analyticHandlers.onLLMStart(llmLabel, messages, options.parentTraceIds, llmMetadata)
             }
 
             // Track execution time
@@ -576,7 +583,14 @@ class LLM_Agentflow implements INode {
 
             // End analytics tracking
             if (analyticHandlers && llmIds) {
-                await analyticHandlers.onLLMEnd(llmIds, finalResponse)
+                const tokenUsage: ITokenUsage | undefined = response.usage_metadata
+                    ? {
+                          promptTokens: response.usage_metadata.input_tokens,
+                          completionTokens: response.usage_metadata.output_tokens,
+                          totalTokens: response.usage_metadata.total_tokens
+                      }
+                    : undefined
+                await analyticHandlers.onLLMEnd(llmIds, finalResponse, tokenUsage)
             }
 
             // Send additional streaming events if needed
