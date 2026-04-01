@@ -15,15 +15,19 @@ router.delete('/workflows/:id', temporalController.deleteWorkflow)
 
 // Workflow execution control
 router.post('/workflows/:id/start', temporalController.startWorkflow)
-router.post('/workflows/:workflowId/signal', temporalController.sendSignal)
-router.get('/workflows/:workflowId/status', temporalController.getWorkflowStatus)
 
 // List executions for a workflow definition
-router.get('/workflows/:flowId/executions', temporalController.listExecutions)
+router.get('/workflows/:id/executions', temporalController.listExecutions)
 
-// Query a specific Temporal execution's state
-// Note: Uses /executions path to distinguish from workflow definitions
-router.get('/executions/:workflowId/query/:queryName', temporalController.queryExecution)
+// ============================================================================
+// Temporal Execution APIs (operations on running Temporal workflow executions)
+// Note: :executionId is the Temporal workflow ID (e.g., "durable-uuid-timestamp"),
+//       not the workflow definition UUID. The service layer uses "workflowId"
+//       to match Temporal SDK terminology.
+// ============================================================================
+router.get('/executions/:executionId/status', temporalController.getExecutionStatus)
+router.post('/executions/:executionId/signal', temporalController.sendSignal)
+router.get('/executions/:executionId/query/:queryName', temporalController.queryExecution)
 
 // AgentFlows list for dropdown
 router.get('/agentflows', temporalController.getWorkspaceAgentFlows)

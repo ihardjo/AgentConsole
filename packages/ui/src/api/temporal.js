@@ -12,9 +12,11 @@ const deleteTemporalWorkflow = (id) => client.delete(`/temporal/workflows/${id}`
 
 const startTemporalWorkflow = (id, body) => client.post(`/temporal/workflows/${id}/start`, body)
 
-const sendSignal = (workflowId, body) => client.post(`/temporal/workflows/${workflowId}/signal`, body)
+// Temporal Execution APIs (operations on running Temporal workflow executions)
+// Note: executionId is the Temporal workflow ID (e.g., "durable-uuid-timestamp")
+const sendSignal = (executionId, body) => client.post(`/temporal/executions/${executionId}/signal`, body)
 
-const getWorkflowStatus = (workflowId) => client.get(`/temporal/workflows/${workflowId}/status`)
+const getExecutionStatus = (executionId) => client.get(`/temporal/executions/${executionId}/status`)
 
 const getAgentFlows = () => client.get('/temporal/agentflows')
 
@@ -36,7 +38,7 @@ export default {
     deleteTemporalWorkflow,
     startTemporalWorkflow,
     sendSignal,
-    getWorkflowStatus,
+    getExecutionStatus,
     getAgentFlows,
     getScheduleDetails,
     pauseSchedule,
