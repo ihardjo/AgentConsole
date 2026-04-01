@@ -1,172 +1,105 @@
+import { Parser } from 'expr-eval'
+
+/**
+ * Expression evaluator using expr-eval library.
+ * Supports compound conditions (&&, ||), parentheses, ternary operators,
+ * math operations, and custom helper functions.
+ */
+
+// Create parser instance
+const parser = new Parser()
+
+// Register custom functions for backward compatibility and convenience
+parser.functions.contains = (str: string, substr: string): boolean => {
+    if (typeof str === 'string' && typeof substr === 'string') {
+        return str.includes(substr)
+    }
+    if (Array.isArray(str)) {
+        return str.includes(substr)
+    }
+    return false
+}
+
+parser.functions.startsWith = (str: string, prefix: string): boolean => {
+    return typeof str === 'string' && typeof prefix === 'string' && str.startsWith(prefix)
+}
+
+parser.functions.endsWith = (str: string, suffix: string): boolean => {
+    return typeof str === 'string' && typeof suffix === 'string' && str.endsWith(suffix)
+}
+
+parser.functions.isNull = (val: any): boolean => {
+    return val === null || val === undefined
+}
+
+parser.functions.isNotNull = (val: any): boolean => {
+    return val !== null && val !== undefined
+}
+
+parser.functions.lower = (str: string): string => {
+    return typeof str === 'string' ? str.toLowerCase() : str
+}
+
+parser.functions.upper = (str: string): string => {
+    return typeof str === 'string' ? str.toUpperCase() : str
+}
+
+parser.functions.length = (val: any): number => {
+    if (Array.isArray(val)) {
+        return val.length
+    }
+    if (typeof val === 'string') {
+        return val.length
+    }
+    return 0
+}
+
+/**
+ * Transforms an expression to be compatible with expr-eval.
+ * - Strips {{ }} from variable references
+ * - Converts && to 'and' and || to 'or' (expr-eval syntax)
+ * - Converts === to == and !== to != (expr-eval doesn't support ===)
+ */
+function transformExpression(expression: string): string {
+    let transformed = expression
+
+    // Strip {{ }} from variable references
+    transformed = transformed.replace(/\{\{([^}]+)\}\}/g, (_, path) => path.trim())
+
+    // Convert JavaScript operators to expr-eval operators
+    // Note: Must replace && before & and || before |
+    transformed = transformed.replace(/&&/g, ' and ')
+    transformed = transformed.replace(/\|\|/g, ' or ')
+    transformed = transformed.replace(/===/g, '==')
+    transformed = transformed.replace(/!==/g, '!=')
+
+    return transformed
+}
+
 /**
  * Evaluates condition expressions for Condition nodes.
- * Supports basic comparison operators: ==, !=, >, <, >=, <=
- * Also supports: contains, startsWith, endsWith, isNull, isNotNull
+ *
+ * Supports:
+ * - Logical operators: && (and), || (or), ! (not)
+ * - Comparison operators: ==, !=, >, <, >=, <=
+ * - Parentheses for grouping: (a > 1) && (b < 2)
+ * - Ternary operator: a > b ? "yes" : "no"
+ * - Math operators: +, -, *, /, %
+ * - Custom functions: contains, startsWith, endsWith, isNull, isNotNull, lower, upper, length
+ *
+ * @param expression - The expression to evaluate (may contain {{variable}} syntax)
+ * @param context - The context object containing variables
+ * @returns The boolean result of the expression
  */
 export function evaluateExpression(expression: string, context: Record<string, any>): boolean {
-    // First resolve any template variables in the expression
-    const resolvedExpression = resolveTemplateVariables(expression, context)
+    const transformed = transformExpression(expression)
 
-    // Parse and evaluate the expression
     try {
-        return parseAndEvaluate(resolvedExpression, context)
+        const expr = parser.parse(transformed)
+        const result = expr.evaluate(context)
+        return Boolean(result)
     } catch (error: any) {
         console.error(`Failed to evaluate expression: ${expression}`, error)
         return false
     }
-}
-
-/**
- * Resolves template variables in expression strings
- */
-function resolveTemplateVariables(expression: string, context: Record<string, any>): string {
-    return expression.replace(/\{\{([^}]+)\}\}/g, (match, path) => {
-        const value = getNestedValue(context, path.trim())
-        if (value === undefined || value === null) {
-            return 'null'
-        }
-        if (typeof value === 'string') {
-            return `"${value}"`
-        }
-        if (typeof value === 'object') {
-            return JSON.stringify(value)
-        }
-        return String(value)
-    })
-}
-
-/**
- * Parses and evaluates a simple comparison expression
- */
-function parseAndEvaluate(expression: string, context: Record<string, any>): boolean {
-    const trimmed = expression.trim()
-
-    // Handle boolean literals
-    if (trimmed === 'true') return true
-    if (trimmed === 'false') return false
-
-    // Handle isNull/isNotNull
-    if (trimmed.endsWith(' isNull')) {
-        const varPath = trimmed.replace(' isNull', '').trim()
-        const value = getValueOrLiteral(varPath, context)
-        return value === null || value === undefined
-    }
-    if (trimmed.endsWith(' isNotNull')) {
-        const varPath = trimmed.replace(' isNotNull', '').trim()
-        const value = getValueOrLiteral(varPath, context)
-        return value !== null && value !== undefined
-    }
-
-    // Handle contains
-    if (trimmed.includes(' contains ')) {
-        const [left, right] = trimmed.split(' contains ').map((s) => s.trim())
-        const leftVal = getValueOrLiteral(left, context)
-        const rightVal = getValueOrLiteral(right, context)
-        if (typeof leftVal === 'string' && typeof rightVal === 'string') {
-            return leftVal.includes(rightVal)
-        }
-        if (Array.isArray(leftVal)) {
-            return leftVal.includes(rightVal)
-        }
-        return false
-    }
-
-    // Handle startsWith
-    if (trimmed.includes(' startsWith ')) {
-        const [left, right] = trimmed.split(' startsWith ').map((s) => s.trim())
-        const leftVal = String(getValueOrLiteral(left, context))
-        const rightVal = String(getValueOrLiteral(right, context))
-        return leftVal.startsWith(rightVal)
-    }
-
-    // Handle endsWith
-    if (trimmed.includes(' endsWith ')) {
-        const [left, right] = trimmed.split(' endsWith ').map((s) => s.trim())
-        const leftVal = String(getValueOrLiteral(left, context))
-        const rightVal = String(getValueOrLiteral(right, context))
-        return leftVal.endsWith(rightVal)
-    }
-
-    // Handle comparison operators
-    const operators = ['===', '!==', '==', '!=', '>=', '<=', '>', '<']
-    for (const op of operators) {
-        if (trimmed.includes(op)) {
-            const [left, right] = trimmed.split(op).map((s) => s.trim())
-            const leftVal = getValueOrLiteral(left, context)
-            const rightVal = getValueOrLiteral(right, context)
-
-            switch (op) {
-                case '===':
-                    return leftVal === rightVal
-                case '!==':
-                    return leftVal !== rightVal
-                case '==':
-                    return leftVal == rightVal
-                case '!=':
-                    return leftVal != rightVal
-                case '>=':
-                    return leftVal >= rightVal
-                case '<=':
-                    return leftVal <= rightVal
-                case '>':
-                    return leftVal > rightVal
-                case '<':
-                    return leftVal < rightVal
-            }
-        }
-    }
-
-    // If no operator found, try to evaluate as truthy/falsy
-    const value = getValueOrLiteral(trimmed, context)
-    return Boolean(value)
-}
-
-/**
- * Gets a value either as a literal or from context
- */
-function getValueOrLiteral(str: string, context: Record<string, any>): any {
-    const trimmed = str.trim()
-
-    // String literal
-    if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
-        return trimmed.slice(1, -1)
-    }
-
-    // Number literal
-    if (!isNaN(Number(trimmed)) && trimmed !== '') {
-        return Number(trimmed)
-    }
-
-    // Boolean literal
-    if (trimmed === 'true') return true
-    if (trimmed === 'false') return false
-
-    // Null literal
-    if (trimmed === 'null') return null
-
-    // Otherwise treat as context path
-    return getNestedValue(context, trimmed)
-}
-
-/**
- * Gets a nested value from an object using dot notation
- */
-function getNestedValue(obj: Record<string, any>, path: string): any {
-    const parts = path.split('.')
-    let current = obj
-
-    for (const part of parts) {
-        if (current === null || current === undefined) {
-            return undefined
-        }
-        const arrayMatch = part.match(/^(\w+)\[(\d+)\]$/)
-        if (arrayMatch) {
-            const [, key, index] = arrayMatch
-            current = current[key]?.[parseInt(index, 10)]
-        } else {
-            current = current[part]
-        }
-    }
-
-    return current
 }

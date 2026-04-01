@@ -11,7 +11,7 @@ import { Box, Typography } from '@mui/material'
 import MainCard from '@/ui-component/cards/MainCard'
 
 // icons
-import { IconBell } from '@tabler/icons-react'
+import { IconUserCheck } from '@tabler/icons-react'
 
 const CardWrapper = styled(MainCard)(({ theme }) => ({
     background: theme.palette.card.main,
@@ -24,11 +24,11 @@ const CardWrapper = styled(MainCard)(({ theme }) => ({
     minWidth: '150px'
 }))
 
-const NODE_COLOR = '#9C27B0' // Purple for SignalWait
+const NODE_COLOR = '#9C27B0' // Purple for Human Task
 
-// ===========================|| SIGNAL WAIT NODE ||=========================== //
+// ===========================|| HUMAN TASK NODE ||=========================== //
 
-const SignalWaitNode = ({ data }) => {
+const HumanTaskNode = ({ data }) => {
     const theme = useTheme()
     const customization = useSelector((state) => state.customization)
     const [isHovered, setIsHovered] = useState(false)
@@ -87,11 +87,14 @@ const SignalWaitNode = ({ data }) => {
                             alignItems: 'center'
                         }}
                     >
-                        <IconBell size={24} color='white' />
+                        <IconUserCheck size={24} color='white' />
                     </Box>
                     <Box>
-                        <Typography sx={{ fontSize: '0.85rem', fontWeight: 500 }}>{data.label || 'Wait for Signal'}</Typography>
-                        <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>{data.signalName || 'No signal name'}</Typography>
+                        <Typography sx={{ fontSize: '0.85rem', fontWeight: 500 }}>{data.label || 'Human Task'}</Typography>
+                        <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>{data.taskName || 'No task name'}</Typography>
+                        {data.assignedRole && (
+                            <Typography sx={{ fontSize: '0.65rem', color: 'text.secondary' }}>Role: {data.assignedRole}</Typography>
+                        )}
                         {data.timeout && (
                             <Typography sx={{ fontSize: '0.65rem', color: 'text.secondary' }}>Timeout: {data.timeout}</Typography>
                         )}
@@ -116,8 +119,8 @@ const SignalWaitNode = ({ data }) => {
     )
 }
 
-SignalWaitNode.propTypes = {
+HumanTaskNode.propTypes = {
     data: PropTypes.object
 }
 
-export default memo(SignalWaitNode)
+export default memo(HumanTaskNode)
