@@ -2,3 +2,4 @@
 export { fetchFlowDefinition } from './fetchFlowDefinition'
 export { callAgentFlow } from './callAgentFlow'
 export { httpRequest } from './httpRequest'
+export { sendEmail } from './sendEmail'

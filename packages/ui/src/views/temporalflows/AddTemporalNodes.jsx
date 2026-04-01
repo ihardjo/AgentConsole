@@ -6,7 +6,17 @@ import { styled, useTheme } from '@mui/material/styles'
 import { Box, Typography, Drawer, IconButton, Divider, Tooltip } from '@mui/material'
 
 // icons
-import { IconPlus, IconX, IconPlayerPlay, IconRobot, IconClock, IconBell, IconGitBranch, IconWorldWww } from '@tabler/icons-react'
+import {
+    IconPlus,
+    IconX,
+    IconPlayerPlay,
+    IconRobot,
+    IconClock,
+    IconGitBranch,
+    IconWorldWww,
+    IconUserCheck,
+    IconInbox
+} from '@tabler/icons-react'
 
 const drawerWidth = 280
 
@@ -59,13 +69,28 @@ const TEMPORAL_NODES = [
         }
     },
     {
-        type: 'temporalSignalWait',
-        label: 'Wait for Signal',
-        description: 'Pause workflow until external signal received',
-        icon: IconBell,
+        type: 'temporalHumanTask',
+        label: 'Human Task',
+        description: 'Wait for human to complete a task',
+        icon: IconUserCheck,
         color: '#9C27B0',
         defaultData: {
+            taskName: '',
+            assignedRole: '',
+            instructions: '',
+            timeout: '',
+            timeoutBehavior: 'continue'
+        }
+    },
+    {
+        type: 'temporalCollectSignals',
+        label: 'Collect Signals',
+        description: 'Wait for multiple signals',
+        icon: IconInbox,
+        color: '#2196F3',
+        defaultData: {
             signalName: '',
+            requiredCount: 2,
             timeout: ''
         }
     },

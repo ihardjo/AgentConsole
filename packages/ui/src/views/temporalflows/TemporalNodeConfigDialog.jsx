@@ -19,11 +19,17 @@ import {
     ToggleButtonGroup,
     ToggleButton,
     Chip,
-    Alert
+    Alert,
+    Checkbox,
+    FormControlLabel,
+    Divider
 } from '@mui/material'
 
 // icons
-import { IconX, IconPlayerPlay, IconClock } from '@tabler/icons-react'
+import { IconX, IconPlayerPlay, IconClock, IconPlus, IconTrash } from '@tabler/icons-react'
+
+// components
+import TemporalTemplateInput from './TemporalTemplateInput'
 
 // ==============================|| TEMPORAL NODE CONFIG DIALOG ||============================== //
 
@@ -32,6 +38,8 @@ const TemporalNodeConfigDialog = ({ open, onClose, dialogProps, onSave }) => {
     const node = dialogProps?.node
     const agentFlows = dialogProps?.agentFlows || []
     const apiKeys = dialogProps?.apiKeys || []
+    const nodes = dialogProps?.nodes || []
+    const edges = dialogProps?.edges || []
 
     useEffect(() => {
         if (node?.data) {
@@ -50,6 +58,37 @@ const TemporalNodeConfigDialog = ({ open, onClose, dialogProps, onSave }) => {
         if (node?.id) {
             onSave(node.id, formData)
         }
+    }
+
+    // Input Variables handlers (Tasks 12.3, 12.4)
+    const addVariable = () => {
+        const currentVars = formData.inputVariables || []
+        handleChange('inputVariables', [...currentVars, { name: '', type: 'string', required: false, defaultValue: '', description: '' }])
+    }
+
+    const removeVariable = (index) => {
+        const currentVars = formData.inputVariables || []
+        handleChange(
+            'inputVariables',
+            currentVars.filter((_, i) => i !== index)
+        )
+    }
+
+    const updateVariable = (index, field, value) => {
+        const currentVars = formData.inputVariables || []
+        const updated = [...currentVars]
+        updated[index] = { ...updated[index], [field]: value }
+        handleChange('inputVariables', updated)
+    }
+
+    // Validate variable name: non-empty, no whitespace, unique
+    const validateVariableName = (name, index) => {
+        if (!name) return 'Name is required'
+        if (/\s/.test(name)) return 'No whitespace allowed'
+        const currentVars = formData.inputVariables || []
+        const duplicate = currentVars.some((v, i) => i !== index && v.name === name)
+        if (duplicate) return 'Name must be unique'
+        return null
     }
 
     const renderFields = () => {
@@ -126,11 +165,104 @@ const TemporalNodeConfigDialog = ({ open, onClose, dialogProps, onSave }) => {
                                 Click Reschedule in the toolbar to apply changes. Your workflow will be saved automatically.
                             </Alert>
                         )}
-                        {formData.triggerMode === 'manual' && (
-                            <Typography variant='body2' color='text.secondary'>
-                                Input variables can be defined here. The workflow will receive these as initial parameters.
+
+                        {/* Input Variables Section */}
+                        <Divider sx={{ my: 1 }} />
+                        <Box>
+                            <Typography variant='body2' sx={{ mb: 1.5, fontWeight: 500 }}>
+                                Input Variables
                             </Typography>
-                        )}
+                            {(formData.inputVariables || []).map((variable, index) => {
+                                const nameError = validateVariableName(variable.name, index)
+                                return (
+                                    <Box
+                                        key={index}
+                                        sx={{
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            gap: 1,
+                                            mb: 2,
+                                            p: 1.5,
+                                            border: '1px solid',
+                                            borderColor: 'divider',
+                                            borderRadius: 1,
+                                            position: 'relative'
+                                        }}
+                                    >
+                                        <IconButton
+                                            onClick={() => removeVariable(index)}
+                                            size='small'
+                                            sx={{ position: 'absolute', top: 4, right: 4 }}
+                                        >
+                                            <IconTrash size={16} />
+                                        </IconButton>
+                                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', pr: 4 }}>
+                                            <TextField
+                                                size='small'
+                                                label='Name'
+                                                value={variable.name}
+                                                onChange={(e) => updateVariable(index, 'name', e.target.value.replace(/\s/g, ''))}
+                                                error={!!variable.name && !!nameError}
+                                                helperText={variable.name ? nameError : ''}
+                                                sx={{ flex: 2 }}
+                                            />
+                                            <FormControl size='small' sx={{ minWidth: 100 }}>
+                                                <InputLabel>Type</InputLabel>
+                                                <Select
+                                                    value={variable.type || 'string'}
+                                                    label='Type'
+                                                    onChange={(e) => updateVariable(index, 'type', e.target.value)}
+                                                >
+                                                    <MenuItem value='string'>String</MenuItem>
+                                                    <MenuItem value='number'>Number</MenuItem>
+                                                    <MenuItem value='boolean'>Boolean</MenuItem>
+                                                    <MenuItem value='object'>Object</MenuItem>
+                                                    <MenuItem value='array'>Array</MenuItem>
+                                                </Select>
+                                            </FormControl>
+                                            <FormControlLabel
+                                                control={
+                                                    <Checkbox
+                                                        checked={variable.required || false}
+                                                        onChange={(e) => updateVariable(index, 'required', e.target.checked)}
+                                                        size='small'
+                                                    />
+                                                }
+                                                label='Required'
+                                                sx={{ mr: 0 }}
+                                            />
+                                        </Box>
+                                        <Box sx={{ display: 'flex', gap: 1 }}>
+                                            <TextField
+                                                size='small'
+                                                label='Default Value'
+                                                value={variable.defaultValue || ''}
+                                                onChange={(e) => updateVariable(index, 'defaultValue', e.target.value)}
+                                                sx={{ flex: 1 }}
+                                                disabled={variable.required}
+                                                helperText={variable.required ? 'Required fields cannot have defaults' : ''}
+                                            />
+                                            <TextField
+                                                size='small'
+                                                label='Description'
+                                                value={variable.description || ''}
+                                                onChange={(e) => updateVariable(index, 'description', e.target.value)}
+                                                sx={{ flex: 1 }}
+                                                placeholder='Optional help text'
+                                            />
+                                        </Box>
+                                    </Box>
+                                )
+                            })}
+                            <Button startIcon={<IconPlus size={16} />} onClick={addVariable} size='small' variant='outlined'>
+                                Add Variable
+                            </Button>
+                            {(formData.inputVariables || []).length > 0 && (
+                                <Alert severity='info' sx={{ mt: 2 }} icon={false}>
+                                    Access in other nodes using: <code style={{ fontWeight: 500 }}>{'{{input.variableName}}'}</code>
+                                </Alert>
+                            )}
+                        </Box>
                     </Box>
                 )
 
@@ -185,15 +317,17 @@ const TemporalNodeConfigDialog = ({ open, onClose, dialogProps, onSave }) => {
                         <Typography variant='caption' color='text.secondary'>
                             Select an API key to authenticate calls to the AgentFlow. Create API keys in Settings.
                         </Typography>
-                        <TextField
+                        <TemporalTemplateInput
                             label='Question Template'
-                            fullWidth
+                            value={formData.question || ''}
+                            onChange={(value) => handleChange('question', value)}
+                            placeholder='Use {{variableName}} to reference workflow variables. Type {{ to see available variables.'
+                            helperText='Template for the question sent to the AgentFlow'
                             multiline
                             rows={3}
-                            value={formData.question || ''}
-                            onChange={(e) => handleChange('question', e.target.value)}
-                            placeholder='Use {{variableName}} to reference workflow variables'
-                            helperText='Template for the question sent to the AgentFlow'
+                            nodes={nodes}
+                            edges={edges}
+                            nodeId={node?.id}
                         />
                     </Box>
                 )
@@ -218,7 +352,74 @@ const TemporalNodeConfigDialog = ({ open, onClose, dialogProps, onSave }) => {
                     </Box>
                 )
 
-            case 'temporalSignalWait':
+            case 'temporalHumanTask':
+                return (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <TextField
+                            label='Label'
+                            fullWidth
+                            value={formData.label || ''}
+                            onChange={(e) => handleChange('label', e.target.value)}
+                        />
+                        <TextField
+                            label='Task Name'
+                            fullWidth
+                            value={formData.taskName || ''}
+                            onChange={(e) => handleChange('taskName', e.target.value)}
+                            placeholder='e.g., Review Application, Approve Request'
+                            helperText='Display name for this human task'
+                        />
+                        <TextField
+                            label='Assigned Role'
+                            fullWidth
+                            value={formData.assignedRole || ''}
+                            onChange={(e) => handleChange('assignedRole', e.target.value)}
+                            placeholder='e.g., Loan Officer, Approver, Manager'
+                            helperText='Role responsible for completing this task'
+                        />
+                        <TemporalTemplateInput
+                            label='Instructions'
+                            value={formData.instructions || ''}
+                            onChange={(value) => handleChange('instructions', value)}
+                            placeholder='Provide detailed instructions for the human completing this task. Type {{ for variables.'
+                            helperText='Instructions shown to the person completing the task'
+                            multiline
+                            rows={3}
+                            nodes={nodes}
+                            edges={edges}
+                            nodeId={node?.id}
+                        />
+                        <TextField
+                            label='Signal Name (optional)'
+                            fullWidth
+                            value={formData.signalName || ''}
+                            onChange={(e) => handleChange('signalName', e.target.value)}
+                            placeholder='Auto-generated if empty'
+                            helperText='Custom signal name, or leave empty for auto-generated task_{nodeId}'
+                        />
+                        <TextField
+                            label='Timeout (optional)'
+                            fullWidth
+                            value={formData.timeout || ''}
+                            onChange={(e) => handleChange('timeout', e.target.value)}
+                            placeholder='e.g., 24h, 7d'
+                            helperText='Time limit for task completion'
+                        />
+                        <FormControl fullWidth>
+                            <InputLabel>Timeout Behavior</InputLabel>
+                            <Select
+                                value={formData.timeoutBehavior || 'continue'}
+                                label='Timeout Behavior'
+                                onChange={(e) => handleChange('timeoutBehavior', e.target.value)}
+                            >
+                                <MenuItem value='continue'>Continue (workflow proceeds with timeout result)</MenuItem>
+                                <MenuItem value='fail'>Fail (workflow throws error on timeout)</MenuItem>
+                            </Select>
+                        </FormControl>
+                    </Box>
+                )
+
+            case 'temporalCollectSignals':
                 return (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                         <TextField
@@ -232,16 +433,25 @@ const TemporalNodeConfigDialog = ({ open, onClose, dialogProps, onSave }) => {
                             fullWidth
                             value={formData.signalName || ''}
                             onChange={(e) => handleChange('signalName', e.target.value)}
-                            placeholder='e.g., approval, user_response'
-                            helperText='Unique name for the signal to wait for'
+                            placeholder='e.g., document_uploaded, approval_received'
+                            helperText='Name of the signal to collect multiple times'
+                        />
+                        <TextField
+                            label='Required Count'
+                            fullWidth
+                            type='number'
+                            value={formData.requiredCount || 2}
+                            onChange={(e) => handleChange('requiredCount', parseInt(e.target.value, 10) || 2)}
+                            inputProps={{ min: 1 }}
+                            helperText='Number of signals to collect before continuing'
                         />
                         <TextField
                             label='Timeout (optional)'
                             fullWidth
                             value={formData.timeout || ''}
                             onChange={(e) => handleChange('timeout', e.target.value)}
-                            placeholder='e.g., 1h, 24h, 7d'
-                            helperText='Optional timeout after which the workflow continues'
+                            placeholder='e.g., 24h, 7d'
+                            helperText='Overall timeout for collecting all signals'
                         />
                     </Box>
                 )
@@ -255,15 +465,17 @@ const TemporalNodeConfigDialog = ({ open, onClose, dialogProps, onSave }) => {
                             value={formData.label || ''}
                             onChange={(e) => handleChange('label', e.target.value)}
                         />
-                        <TextField
+                        <TemporalTemplateInput
                             label='Expression'
-                            fullWidth
+                            value={formData.expression || ''}
+                            onChange={(value) => handleChange('expression', value)}
+                            placeholder="e.g., {{result}} === 'approved' or {{count}} > 10. Type {{ for variables."
+                            helperText='JavaScript-like expression that evaluates to true or false'
                             multiline
                             rows={2}
-                            value={formData.expression || ''}
-                            onChange={(e) => handleChange('expression', e.target.value)}
-                            placeholder="e.g., {{result}} === 'approved' or {{count}} > 10"
-                            helperText='JavaScript-like expression that evaluates to true or false'
+                            nodes={nodes}
+                            edges={edges}
+                            nodeId={node?.id}
                         />
                     </Box>
                 )
@@ -291,41 +503,47 @@ const TemporalNodeConfigDialog = ({ open, onClose, dialogProps, onSave }) => {
                                 <MenuItem value='DELETE'>DELETE</MenuItem>
                             </Select>
                         </FormControl>
-                        <TextField
+                        <TemporalTemplateInput
                             label='URL'
-                            fullWidth
                             value={formData.url || ''}
-                            onChange={(e) => handleChange('url', e.target.value)}
-                            placeholder='https://api.example.com/endpoint'
+                            onChange={(value) => handleChange('url', value)}
+                            placeholder='https://api.example.com/endpoint. Type {{ for variables.'
                             helperText='Use {{variableName}} for dynamic values'
+                            nodes={nodes}
+                            edges={edges}
+                            nodeId={node?.id}
                         />
-                        <TextField
+                        <TemporalTemplateInput
                             label='Headers (JSON)'
-                            fullWidth
-                            multiline
-                            rows={2}
                             value={
                                 typeof formData.headers === 'object' ? JSON.stringify(formData.headers, null, 2) : formData.headers || ''
                             }
-                            onChange={(e) => {
+                            onChange={(value) => {
                                 try {
-                                    const parsed = JSON.parse(e.target.value)
+                                    const parsed = JSON.parse(value)
                                     handleChange('headers', parsed)
                                 } catch {
-                                    handleChange('headers', e.target.value)
+                                    handleChange('headers', value)
                                 }
                             }}
                             placeholder='{"Authorization": "Bearer {{token}}"}'
-                        />
-                        <TextField
-                            label='Body (JSON)'
-                            fullWidth
                             multiline
-                            rows={3}
+                            rows={2}
+                            nodes={nodes}
+                            edges={edges}
+                            nodeId={node?.id}
+                        />
+                        <TemporalTemplateInput
+                            label='Body (JSON)'
                             value={formData.body || ''}
-                            onChange={(e) => handleChange('body', e.target.value)}
+                            onChange={(value) => handleChange('body', value)}
                             placeholder='{"key": "{{value}}"}'
                             helperText='Request body for POST/PUT/PATCH requests'
+                            multiline
+                            rows={3}
+                            nodes={nodes}
+                            edges={edges}
+                            nodeId={node?.id}
                         />
                     </Box>
                 )

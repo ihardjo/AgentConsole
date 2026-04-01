@@ -322,6 +322,65 @@ const deleteSchedule = async (req: Request, res: Response, next: NextFunction) =
     }
 }
 
+// ============================================================================
+// Workflow Execution APIs (for querying running Temporal executions)
+// ============================================================================
+
+/**
+ * List all workflow executions for a given flow definition
+ * GET /workflows/:flowId/executions
+ */
+const listExecutions = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { flowId } = req.params
+        if (!flowId) {
+            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'Flow ID is required')
+        }
+
+        const workspaceId = req.user?.activeWorkspaceId
+        if (!workspaceId) {
+            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'Workspace ID is required')
+        }
+
+        // Verify the flow belongs to this workspace
+        await temporalService.getWorkflowById(flowId, workspaceId)
+
+        const status = req.query?.status as string | undefined
+        const result = await temporalService.listWorkflowExecutions(flowId, status)
+        return res.json(result)
+    } catch (error) {
+        next(error)
+    }
+}
+
+/**
+ * Query a specific workflow execution's state
+ * GET /executions/:workflowId/query/:queryName
+ */
+const queryExecution = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { workflowId, queryName } = req.params
+        if (!workflowId) {
+            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'Workflow ID is required')
+        }
+        if (!queryName) {
+            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'Query name is required')
+        }
+
+        // Note: We don't verify workspace ownership here because the workflowId
+        // is a Temporal execution ID, not a flow definition ID. The Temporal
+        // namespace already provides isolation.
+
+        const result = await temporalService.queryWorkflowExecution({
+            workflowId,
+            queryName
+        })
+        return res.json(result)
+    } catch (error) {
+        next(error)
+    }
+}
+
 export default {
     getAllWorkflows,
     getWorkflowById,
@@ -337,5 +396,7 @@ export default {
     pauseSchedule,
     unpauseSchedule,
     triggerSchedule,
-    deleteSchedule
+    deleteSchedule,
+    listExecutions,
+    queryExecution
 }

@@ -71,10 +71,14 @@ export function getNextNodes(currentNodeId: string, edges: FlowEdge[], nodes: Fl
     // Filter edges from current node
     let outgoingEdges = edges.filter((e) => e.source === currentNodeId)
 
-    // For condition nodes, filter by the branch
-    if (currentNode?.type === 'condition' && conditionResult !== undefined) {
-        const branchHandle = conditionResult ? 'true' : 'false'
-        outgoingEdges = outgoingEdges.filter((e) => e.sourceHandle === branchHandle || e.sourceHandle === branchHandle + '-output')
+    // For condition nodes, filter by the branch taken
+    // Handle both 'condition' (legacy) and 'temporalCondition' node types
+    const isConditionNode = currentNode?.type === 'condition' || currentNode?.type === 'temporalCondition'
+    if (isConditionNode && conditionResult !== undefined) {
+        const branchKey = conditionResult ? 'true' : 'false'
+        // sourceHandle format is typically `${nodeId}-true` or `${nodeId}-false`
+        // Use includes() to match regardless of prefix
+        outgoingEdges = outgoingEdges.filter((e) => e.sourceHandle?.includes(branchKey))
     }
 
     return outgoingEdges.map((e) => nodeMap.get(e.target)!).filter(Boolean)
