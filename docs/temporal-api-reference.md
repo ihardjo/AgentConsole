@@ -208,13 +208,13 @@ If the Start node is configured with `triggerMode: "scheduled"`, this endpoint c
 
 ---
 
-### Get Workflow Status
+### Get Execution Status
 
 ```http
-GET /workflows/:workflowId/status
+GET /executions/:executionId/status
 ```
 
-**Note:** `:workflowId` is the Temporal execution ID (e.g., `durable-xxx-timestamp`), not the flow definition UUID.
+**Note:** `:executionId` is the Temporal execution ID (e.g., `durable-xxx-timestamp`), not the flow definition UUID.
 
 **Response:**
 
@@ -245,10 +245,10 @@ GET /workflows/:workflowId/status
 ### List Executions
 
 ```http
-GET /workflows/:flowId/executions
+GET /workflows/:id/executions
 ```
 
-**Note:** `:flowId` is the workflow definition UUID.
+**Note:** `:id` is the workflow definition UUID.
 
 **Query Parameters:**
 
@@ -288,8 +288,10 @@ Send signals to running workflows to complete human tasks or provide external in
 ### Send Signal
 
 ```http
-POST /workflows/:workflowId/signal
+POST /executions/:executionId/signal
 ```
+
+**Note:** `:executionId` is the Temporal execution ID (e.g., `durable-xxx-timestamp`), not the flow definition UUID.
 
 **Request Body:**
 
@@ -336,8 +338,10 @@ Query the internal state of running workflows.
 ### Query Workflow State
 
 ```http
-GET /executions/:workflowId/query/:queryName
+GET /executions/:executionId/query/:queryName
 ```
+
+**Note:** `:executionId` is the Temporal execution ID (e.g., `durable-xxx-timestamp`), not the flow definition UUID.
 
 **Built-in Query: `getWorkflowState`**
 
@@ -725,7 +729,7 @@ const { pendingTasks } = await stateResponse.json()
 // 3. Complete a task
 if (pendingTasks.length > 0) {
     const task = pendingTasks[0]
-    await fetch(`/api/v1/temporal/workflows/${workflowId}/signal`, {
+    await fetch(`/api/v1/temporal/executions/${workflowId}/signal`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -739,11 +743,11 @@ if (pendingTasks.length > 0) {
 ### Monitor Workflow Status
 
 ```javascript
-async function waitForCompletion(workflowId, maxWaitMs = 60000) {
+async function waitForCompletion(executionId, maxWaitMs = 60000) {
     const startTime = Date.now()
 
     while (Date.now() - startTime < maxWaitMs) {
-        const response = await fetch(`/api/v1/temporal/workflows/${workflowId}/status`)
+        const response = await fetch(`/api/v1/temporal/executions/${executionId}/status`)
         const { status } = await response.json()
 
         if (status === 'COMPLETED') return { success: true }

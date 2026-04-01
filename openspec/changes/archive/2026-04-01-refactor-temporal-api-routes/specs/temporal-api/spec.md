@@ -1,3 +1,5 @@
+## MODIFIED Requirements
+
 ### Requirement: API provides list executions endpoint
 
 The system SHALL provide a REST endpoint for listing all workflow executions of a given workflow definition.
@@ -50,6 +52,8 @@ Note: We use `/executions/:executionId` to clearly distinguish from workflow def
 -   **WHEN** Temporal client encounters an error during query
 -   **THEN** system returns 500 Internal Server Error with error details
 
+## ADDED Requirements
+
 ### Requirement: API provides get execution status endpoint
 
 The system SHALL provide a REST endpoint for retrieving the status of a specific Temporal workflow execution.
@@ -84,3 +88,17 @@ The system SHALL provide a REST endpoint for sending signals to running Temporal
 
 -   **WHEN** client sends signal to an executionId that does not exist
 -   **THEN** system returns 500 Internal Server Error with "workflow not found" message
+
+## REMOVED Requirements
+
+### Requirement: API provides workflow status endpoint under /workflows path
+
+**Reason**: Moved to `/executions/:executionId/status` for semantic clarity. The old route at `GET /workflows/:workflowId/status` incorrectly suggested it operated on workflow definitions.
+
+**Migration**: Use `GET /api/v1/temporal/executions/:executionId/status` instead.
+
+### Requirement: API provides signal endpoint under /workflows path
+
+**Reason**: Moved to `/executions/:executionId/signal` for semantic clarity. The old route at `POST /workflows/:workflowId/signal` incorrectly suggested it operated on workflow definitions.
+
+**Migration**: Use `POST /api/v1/temporal/executions/:executionId/signal` instead.
