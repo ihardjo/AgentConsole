@@ -145,11 +145,17 @@ const startWorkflow = async (req: Request, res: Response, next: NextFunction) =>
     }
 }
 
+// ============================================================================
+// Temporal Execution APIs
+// Note: API uses "executionId" for clarity, but service layer uses "workflowId"
+//       to match Temporal SDK terminology. The executionId IS a Temporal workflowId.
+// ============================================================================
+
 const sendSignal = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { workflowId } = req.params
-        if (!workflowId) {
-            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'Workflow ID is required')
+        const { executionId } = req.params
+        if (!executionId) {
+            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'Execution ID is required')
         }
 
         const { signalName, payload } = req.body
@@ -157,8 +163,9 @@ const sendSignal = async (req: Request, res: Response, next: NextFunction) => {
             throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'Signal name is required')
         }
 
+        // Map API executionId to service workflowId (Temporal SDK terminology)
         await temporalService.sendSignal({
-            workflowId,
+            workflowId: executionId,
             signalName,
             payload
         })
@@ -169,14 +176,15 @@ const sendSignal = async (req: Request, res: Response, next: NextFunction) => {
     }
 }
 
-const getWorkflowStatus = async (req: Request, res: Response, next: NextFunction) => {
+const getExecutionStatus = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { workflowId } = req.params
-        if (!workflowId) {
-            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'Workflow ID is required')
+        const { executionId } = req.params
+        if (!executionId) {
+            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'Execution ID is required')
         }
 
-        const status = await temporalService.getWorkflowStatus(workflowId)
+        // Map API executionId to service workflowId (Temporal SDK terminology)
+        const status = await temporalService.getWorkflowStatus(executionId)
         return res.json(status)
     } catch (error) {
         next(error)
@@ -328,13 +336,13 @@ const deleteSchedule = async (req: Request, res: Response, next: NextFunction) =
 
 /**
  * List all workflow executions for a given flow definition
- * GET /workflows/:flowId/executions
+ * GET /workflows/:id/executions
  */
 const listExecutions = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { flowId } = req.params
-        if (!flowId) {
-            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'Flow ID is required')
+        const { id } = req.params
+        if (!id) {
+            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'Workflow ID is required')
         }
 
         const workspaceId = req.user?.activeWorkspaceId
@@ -343,10 +351,10 @@ const listExecutions = async (req: Request, res: Response, next: NextFunction) =
         }
 
         // Verify the flow belongs to this workspace
-        await temporalService.getWorkflowById(flowId, workspaceId)
+        await temporalService.getWorkflowById(id, workspaceId)
 
         const status = req.query?.status as string | undefined
-        const result = await temporalService.listWorkflowExecutions(flowId, status)
+        const result = await temporalService.listWorkflowExecutions(id, status)
         return res.json(result)
     } catch (error) {
         next(error)
@@ -355,24 +363,25 @@ const listExecutions = async (req: Request, res: Response, next: NextFunction) =
 
 /**
  * Query a specific workflow execution's state
- * GET /executions/:workflowId/query/:queryName
+ * GET /executions/:executionId/query/:queryName
  */
 const queryExecution = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { workflowId, queryName } = req.params
-        if (!workflowId) {
-            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'Workflow ID is required')
+        const { executionId, queryName } = req.params
+        if (!executionId) {
+            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'Execution ID is required')
         }
         if (!queryName) {
             throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'Query name is required')
         }
 
-        // Note: We don't verify workspace ownership here because the workflowId
+        // Note: We don't verify workspace ownership here because the executionId
         // is a Temporal execution ID, not a flow definition ID. The Temporal
         // namespace already provides isolation.
 
+        // Map API executionId to service workflowId (Temporal SDK terminology)
         const result = await temporalService.queryWorkflowExecution({
-            workflowId,
+            workflowId: executionId,
             queryName
         })
         return res.json(result)
@@ -389,7 +398,7 @@ export default {
     deleteWorkflow,
     startWorkflow,
     sendSignal,
-    getWorkflowStatus,
+    getExecutionStatus,
     getWorkspaceAgentFlows,
     healthCheck,
     getScheduleDetails,
