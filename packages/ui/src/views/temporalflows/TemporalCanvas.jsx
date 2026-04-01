@@ -20,12 +20,14 @@ import ConfirmDialog from '@/ui-component/dialog/ConfirmDialog'
 import TemporalStartNode from './nodes/StartNode'
 import TemporalAgentFlowCallNode from './nodes/AgentFlowCallNode'
 import TemporalTimerNode from './nodes/TimerNode'
-import TemporalSignalWaitNode from './nodes/SignalWaitNode'
+import TemporalHumanTaskNode from './nodes/HumanTaskNode'
+import TemporalCollectSignalsNode from './nodes/CollectSignalsNode'
 import TemporalConditionNode from './nodes/ConditionNode'
 import TemporalHTTPRequestNode from './nodes/HTTPRequestNode'
 import TemporalEdge from './TemporalEdge'
 import AddTemporalNodes from './AddTemporalNodes'
 import TemporalNodeConfigDialog from './TemporalNodeConfigDialog'
+import RunWorkflowDialog from './RunWorkflowDialog'
 import temporalApi from '@/api/temporal'
 import apikeyApi from '@/api/apikey'
 import useApi from '@/hooks/useApi'
@@ -52,7 +54,8 @@ const nodeTypes = {
     temporalStart: TemporalStartNode,
     temporalAgentFlowCall: TemporalAgentFlowCallNode,
     temporalTimer: TemporalTimerNode,
-    temporalSignalWait: TemporalSignalWaitNode,
+    temporalHumanTask: TemporalHumanTaskNode,
+    temporalCollectSignals: TemporalCollectSignalsNode,
     temporalCondition: TemporalConditionNode,
     temporalHTTPRequest: TemporalHTTPRequestNode
 }
@@ -82,6 +85,7 @@ const TemporalCanvas = () => {
     const [selectedNode, setSelectedNode] = useState(null)
     const [configDialogOpen, setConfigDialogOpen] = useState(false)
     const [configDialogProps, setConfigDialogProps] = useState({})
+    const [runDialogOpen, setRunDialogOpen] = useState(false)
     const [isSnappingEnabled, setIsSnappingEnabled] = useState(false)
     const [isBackgroundEnabled, setIsBackgroundEnabled] = useState(true)
     const [workflowName, setWorkflowName] = useState('Untitled Workflow')
@@ -226,6 +230,20 @@ const TemporalCanvas = () => {
             })
             return
         }
+
+        // Check if manual workflow has input variables - open dialog to collect input
+        if (startNodeTriggerMode === 'manual') {
+            const inputVariables = startNodeData?.inputVariables || []
+            if (inputVariables.length > 0) {
+                setRunDialogOpen(true)
+                return
+            }
+            // No input variables - run directly with empty input
+            await executeWorkflow({})
+            return
+        }
+
+        // Handle scheduled workflows (existing logic)
         if (startNodeTriggerMode === 'scheduled' && hasScheduleId) {
             const confirmPayload = {
                 title: 'Reschedule',
@@ -279,8 +297,13 @@ const TemporalCanvas = () => {
                 return
             }
         }
+        await executeWorkflow({})
+    }
+
+    // Execute workflow with input (used by both direct run and RunWorkflowDialog)
+    const executeWorkflow = async (input) => {
         try {
-            const result = await temporalApi.startTemporalWorkflow(workflow.id, {})
+            const result = await temporalApi.startTemporalWorkflow(workflow.id, { input })
             const data = result.data
             let message
             if (data.triggerMode === 'scheduled') {
@@ -357,6 +380,12 @@ const TemporalCanvas = () => {
                 }
             })
         }
+    }
+
+    // Handle run from dialog with input values
+    const handleRunWithInput = async (input) => {
+        setRunDialogOpen(false)
+        await executeWorkflow(input)
     }
 
     const handleOpenTemporalUI = () => {
@@ -548,11 +577,13 @@ const TemporalCanvas = () => {
             setConfigDialogProps({
                 node,
                 agentFlows: temporal.agentFlows || [],
-                apiKeys: apiKeys
+                apiKeys: apiKeys,
+                nodes: nodes,
+                edges: edges
             })
             setConfigDialogOpen(true)
         },
-        [temporal.agentFlows, apiKeys]
+        [temporal.agentFlows, apiKeys, nodes, edges]
     )
 
     const onDragOver = useCallback((event) => {
@@ -927,6 +958,13 @@ const TemporalCanvas = () => {
                     onClose={() => setConfigDialogOpen(false)}
                     dialogProps={configDialogProps}
                     onSave={handleConfigSave}
+                />
+                <RunWorkflowDialog
+                    open={runDialogOpen}
+                    onClose={() => setRunDialogOpen(false)}
+                    workflow={workflow}
+                    inputVariables={startNodeData?.inputVariables || []}
+                    onRun={handleRunWithInput}
                 />
             </Box>
         </>

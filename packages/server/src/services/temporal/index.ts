@@ -507,6 +507,100 @@ const deleteSchedule = async (scheduleId: string): Promise<void> => {
     }
 }
 
+// ============================================================================
+// Workflow Execution APIs (for querying running Temporal executions)
+// ============================================================================
+
+export interface WorkflowExecution {
+    workflowId: string
+    runId: string
+    status: string
+    startTime?: string
+    closeTime?: string
+}
+
+export interface ListExecutionsResponse {
+    executions: WorkflowExecution[]
+    total: number
+}
+
+/**
+ * List all workflow executions for a given flow definition (flowId)
+ */
+const listWorkflowExecutions = async (flowId: string, status?: string): Promise<ListExecutionsResponse> => {
+    try {
+        const client = await getTemporalClient()
+
+        // Build query to find executions for this flow definition
+        // Workflow IDs are formatted as "durable-{flowId}-{timestamp}"
+        let query = `WorkflowType = "durableWorkflowExecutor"`
+
+        // Add status filter if provided
+        if (status) {
+            query += ` AND ExecutionStatus = "${status}"`
+        }
+
+        const result = await client.workflowService.listWorkflowExecutions({
+            namespace: config.temporal.namespace || 'default',
+            query
+        })
+
+        // Filter by flowId (from workflowId pattern)
+        const filtered = (result.executions || []).filter((exec: any) => {
+            const workflowId = exec.execution?.workflowId || ''
+            return workflowId.includes(flowId)
+        })
+
+        return {
+            executions: filtered.map((exec: any) => ({
+                workflowId: exec.execution?.workflowId || '',
+                runId: exec.execution?.runId || '',
+                status: exec.status?.name || 'UNKNOWN',
+                startTime: exec.startTime ? new Date(Number(exec.startTime.seconds) * 1000).toISOString() : undefined,
+                closeTime: exec.closeTime ? new Date(Number(exec.closeTime.seconds) * 1000).toISOString() : undefined
+            })),
+            total: filtered.length
+        }
+    } catch (error) {
+        throw new InternalFlowiseError(
+            StatusCodes.INTERNAL_SERVER_ERROR,
+            `Error: temporalService.listWorkflowExecutions - ${getErrorMessage(error)}`
+        )
+    }
+}
+
+export interface QueryWorkflowExecutionParams {
+    workflowId: string
+    queryName: string
+    args?: any
+}
+
+/**
+ * Query a specific workflow execution's state
+ */
+const queryWorkflowExecution = async (params: QueryWorkflowExecutionParams): Promise<any> => {
+    try {
+        const client = await getTemporalClient()
+        const handle = client.workflow.getHandle(params.workflowId)
+        const result = await handle.query(params.queryName, params.args)
+        return result
+    } catch (error: any) {
+        const errorMessage = error.message || ''
+
+        // Check for query handler not registered
+        if (errorMessage.includes('query handler') || errorMessage.includes('unknown queryType')) {
+            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, `Query handler '${params.queryName}' is not registered in workflow`)
+        }
+
+        // Check for workflow not found
+        if (errorMessage.includes('not found') || errorMessage.includes('NotFound')) {
+            throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Workflow execution '${params.workflowId}' not found`)
+        }
+
+        throw new InternalFlowiseError(StatusCodes.INTERNAL_SERVER_ERROR, `Error querying workflow: ${getErrorMessage(error)}`)
+    }
+}
+
 export default {
     getAllWorkflows,
     getWorkflowById,
@@ -522,5 +616,7 @@ export default {
     pauseSchedule,
     unpauseSchedule,
     triggerSchedule,
-    deleteSchedule
+    deleteSchedule,
+    listWorkflowExecutions,
+    queryWorkflowExecution
 }
