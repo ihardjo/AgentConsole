@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { enqueueSnackbar as enqueueSnackbarAction, closeSnackbar as closeSnackbarAction } from '@/store/actions'
 import moment from 'moment'
@@ -69,9 +68,27 @@ import GitSyncPanel from './GitSyncPanel'
 
 // ==============================|| AGENT OPS - VERSION HISTORY ||============================== //
 
+/**
+ * Parse a git remote URL to a short "owner/repo" display string.
+ * Handles both HTTPS and SSH formats. Returns null when no URL is provided.
+ * Exported so GitSyncPanel can reuse the same logic without duplication.
+ */
+export function parseRepoName(url) {
+    if (!url) return null
+    try {
+        const cleaned = url.replace(/\.git$/, '')
+        const httpsMatch = cleaned.match(/https?:\/\/[^/]+\/(.+)/)
+        if (httpsMatch) return httpsMatch[1]
+        const sshMatch = cleaned.match(/[^:]+:(.+)/)
+        if (sshMatch) return sshMatch[1]
+        return cleaned
+    } catch {
+        return url
+    }
+}
+
 const AgentOps = () => {
     const theme = useTheme()
-    const navigate = useNavigate()
     const dispatch = useDispatch()
     const customization = useSelector((state) => state.customization)
     const borderColor = theme.palette.grey[900] + 25
@@ -81,6 +98,28 @@ const AgentOps = () => {
 
     const enqueueSnackbar = (...args) => dispatch(enqueueSnackbarAction(...args))
     const closeSnackbar = (...args) => dispatch(closeSnackbarAction(...args))
+
+    /**
+     * Convenience wrapper: show a snackbar without repeating the key/action boilerplate.
+     * @param {string} message
+     * @param {'success'|'error'|'warning'|'info'} variant
+     * @param {boolean} [persist] – keep the notification until manually dismissed
+     */
+    const showSnackbar = (message, variant = 'info', persist = false) => {
+        enqueueSnackbar({
+            message,
+            options: {
+                key: new Date().getTime() + Math.random(),
+                variant,
+                ...(persist ? { persist: true } : {}),
+                action: (key) => (
+                    <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
+                        <IconX />
+                    </Button>
+                )
+            }
+        })
+    }
 
     // API hooks
     const getAllVersionsGroupedApi = useApi(chatflowVersionsApi.getAllVersionsGrouped)
@@ -196,21 +235,13 @@ const AgentOps = () => {
                     changeDescription: saveVersionForm.changeDescription || 'Manual version save'
                 })
             } catch (error) {
-                enqueueSnackbar({
-                    message: `Failed to create version: ${
+                showSnackbar(
+                    `Failed to create version: ${
                         typeof error.response?.data === 'object' ? error.response.data.message : error.response?.data || error.message
                     }`,
-                    options: {
-                        key: new Date().getTime() + Math.random(),
-                        variant: 'error',
-                        persist: true,
-                        action: (key) => (
-                            <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
-                                <IconX />
-                            </Button>
-                        )
-                    }
-                })
+                    'error',
+                    true
+                )
             }
         }
     }
@@ -242,39 +273,20 @@ const AgentOps = () => {
                 await updateVersionApi.request(selectedVersion.id, {
                     changeDescription: editVersionForm.changeDescription || ''
                 })
-                enqueueSnackbar({
-                    message: 'Version updated successfully',
-                    options: {
-                        key: new Date().getTime() + Math.random(),
-                        variant: 'success',
-                        action: (key) => (
-                            <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
-                                <IconX />
-                            </Button>
-                        )
-                    }
-                })
+                showSnackbar('Version updated successfully', 'success')
                 // Refresh the table and close dialog after successful update
                 await fetchVersions()
                 setOpenEditVersionDialog(false)
                 setEditVersionForm({ changeDescription: '' })
                 setSelectedVersion(null)
             } catch (error) {
-                enqueueSnackbar({
-                    message: `Failed to update version: ${
+                showSnackbar(
+                    `Failed to update version: ${
                         typeof error.response?.data === 'object' ? error.response.data.message : error.response?.data || error.message
                     }`,
-                    options: {
-                        key: new Date().getTime() + Math.random(),
-                        variant: 'error',
-                        persist: true,
-                        action: (key) => (
-                            <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
-                                <IconX />
-                            </Button>
-                        )
-                    }
-                })
+                    'error',
+                    true
+                )
                 // Close dialog on error
                 setOpenEditVersionDialog(false)
                 setEditVersionForm({ changeDescription: '' })
@@ -289,9 +301,8 @@ const AgentOps = () => {
     }
 
     // Version actions
-    const handleVersionClick = (version) => {
-        // Navigate to version details or open a drawer
-        console.log('View version details:', version)
+    const handleVersionClick = (_version) => {
+        // TODO: Navigate to version details or open a drawer
     }
 
     const handleRestoreClick = (version) => {
@@ -307,18 +318,7 @@ const AgentOps = () => {
         if (selectedVersion) {
             try {
                 await restoreVersionApi.request(selectedVersion.id)
-                enqueueSnackbar({
-                    message: 'Version restored successfully',
-                    options: {
-                        key: new Date().getTime() + Math.random(),
-                        variant: 'success',
-                        action: (key) => (
-                            <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
-                                <IconX />
-                            </Button>
-                        )
-                    }
-                })
+                showSnackbar('Version restored successfully', 'success')
                 // Refresh the table and close dialog after successful restore
                 await fetchVersions()
                 setOpenRestoreDialog(false)
@@ -327,21 +327,13 @@ const AgentOps = () => {
                 // Refresh git sync status so the badge updates (new commit → out of sync)
                 getGitSyncStatusApi.request()
             } catch (error) {
-                enqueueSnackbar({
-                    message: `Failed to restore version: ${
+                showSnackbar(
+                    `Failed to restore version: ${
                         typeof error.response?.data === 'object' ? error.response.data.message : error.response?.data || error.message
                     }`,
-                    options: {
-                        key: new Date().getTime() + Math.random(),
-                        variant: 'error',
-                        persist: true,
-                        action: (key) => (
-                            <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
-                                <IconX />
-                            </Button>
-                        )
-                    }
-                })
+                    'error',
+                    true
+                )
                 // Close dialog on error
                 setOpenRestoreDialog(false)
                 setRestoreHasUnsavedChanges(false)
@@ -372,18 +364,7 @@ const AgentOps = () => {
         if (selectedVersion) {
             try {
                 await deleteVersionApi.request(selectedVersion.id)
-                enqueueSnackbar({
-                    message: 'Version deleted successfully',
-                    options: {
-                        key: new Date().getTime() + Math.random(),
-                        variant: 'success',
-                        action: (key) => (
-                            <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
-                                <IconX />
-                            </Button>
-                        )
-                    }
-                })
+                showSnackbar('Version deleted successfully', 'success')
                 // Refresh the table and close dialog after successful delete
                 await fetchVersions()
                 setOpenDeleteDialog(false)
@@ -391,21 +372,13 @@ const AgentOps = () => {
                 // Refresh git sync status so the badge updates (new commit → out of sync)
                 getGitSyncStatusApi.request()
             } catch (error) {
-                enqueueSnackbar({
-                    message: `Failed to delete version: ${
+                showSnackbar(
+                    `Failed to delete version: ${
                         typeof error.response?.data === 'object' ? error.response.data.message : error.response?.data || error.message
                     }`,
-                    options: {
-                        key: new Date().getTime() + Math.random(),
-                        variant: 'error',
-                        persist: true,
-                        action: (key) => (
-                            <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
-                                <IconX />
-                            </Button>
-                        )
-                    }
-                })
+                    'error',
+                    true
+                )
                 // Close dialog on error
                 setOpenDeleteDialog(false)
             }
@@ -434,8 +407,8 @@ const AgentOps = () => {
                     expanded[group.chatFlowId] = true
                 })
                 setExpandedFlows(expanded)
-            } catch (e) {
-                console.error(e)
+            } catch {
+                // Defensive: ignore malformed API response
             }
         }
     }, [getAllVersionsGroupedApi.data])
@@ -457,18 +430,7 @@ const AgentOps = () => {
     // Refresh after version creation
     useEffect(() => {
         if (createVersionApi.data) {
-            enqueueSnackbar({
-                message: 'Version created successfully',
-                options: {
-                    key: new Date().getTime() + Math.random(),
-                    variant: 'success',
-                    action: (key) => (
-                        <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
-                            <IconX />
-                        </Button>
-                    )
-                }
-            })
+            showSnackbar('Version created successfully', 'success')
             fetchVersions()
             handleCloseSaveVersion()
             // Refresh git sync status so the badge updates (new commit → out of sync)
@@ -531,37 +493,25 @@ const AgentOps = () => {
                     ? 'active'
                     : 'inactive'
 
-    const gitSyncStateColor = customization.isDarkMode
-        ? {
-              error:         theme.palette.error.main,
-              conflicts:     theme.palette.error.main,
-              'out-of-sync': theme.palette.warning.main,
-              active:        theme.palette.success.main,
-              inactive:      theme.palette.text.secondary
-          }[gitSyncState]
-        : {
-              error:         theme.palette.error.dark,
-              conflicts:     theme.palette.error.dark,
-              'out-of-sync': theme.palette.warning.dark,
-              active:        theme.palette.success.dark,
-              inactive:      theme.palette.text.secondary
-          }[gitSyncState]
+    /**
+     * Palette tokens per state × mode.
+     * dark[state]  = the "primary" colour in dark mode
+     * light[state] = the "primary" colour in light mode
+     * The inverted variant (used for hover / darker shade) simply swaps
+     * .main ↔ .dark.
+     */
+    const GIT_STATE_PALETTE = {
+        error:         { main: theme.palette.error.main,   dark: theme.palette.error.dark   },
+        conflicts:     { main: theme.palette.error.main,   dark: theme.palette.error.dark   },
+        'out-of-sync': { main: theme.palette.warning.main, dark: theme.palette.warning.dark },
+        active:        { main: theme.palette.success.main, dark: theme.palette.success.dark },
+        inactive:      { main: theme.palette.text.secondary, dark: theme.palette.text.secondary }
+    }
 
-    const gitSyncStateColorDark = customization.isDarkMode
-        ? {
-              error:         theme.palette.error.dark,
-              conflicts:     theme.palette.error.dark,
-              'out-of-sync': theme.palette.warning.dark,
-              active:        theme.palette.success.dark,
-              inactive:      theme.palette.text.secondary
-          }[gitSyncState]
-        : {
-              error:         theme.palette.error.main,
-              conflicts:     theme.palette.error.main,
-              'out-of-sync': theme.palette.warning.main,
-              active:        theme.palette.success.main,
-              inactive:      theme.palette.text.secondary
-          }[gitSyncState]
+    const palette = GIT_STATE_PALETTE[gitSyncState]
+    // In dark mode the lighter token reads better; in light mode use the darker one.
+    const gitSyncStateColor     = customization.isDarkMode ? palette.main : palette.dark
+    const gitSyncStateColorDark = customization.isDarkMode ? palette.dark : palette.main
 
     const gitSyncTooltip = {
         error:        `Git Sync Error: ${gitSyncLastError}`,
@@ -576,23 +526,7 @@ const AgentOps = () => {
         : 'Git Sync'
 
     // Derive a short human-readable repo name from the remote URL.
-    // Strips the protocol, host, trailing .git, and returns "owner/repo".
-    // Falls back to the raw URL if parsing fails, or null when not configured.
-    const gitSyncRepoName = (() => {
-        const url = gitSyncStatus?.remoteUrl
-        if (!url) return null
-        try {
-            // Handles https://github.com/owner/repo.git and git@github.com:owner/repo.git
-            const cleaned = url.replace(/\.git$/, '')
-            const httpsMatch = cleaned.match(/https?:\/\/[^/]+\/(.+)/)
-            if (httpsMatch) return httpsMatch[1]
-            const sshMatch = cleaned.match(/[^:]+:(.+)/)
-            if (sshMatch) return sshMatch[1]
-            return cleaned
-        } catch {
-            return url
-        }
-    })()
+    const gitSyncRepoName = parseRepoName(gitSyncStatus?.remoteUrl)
 
     const gitSyncChipLabel = {
         error:        'Error',

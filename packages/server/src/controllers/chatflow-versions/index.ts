@@ -62,19 +62,21 @@ const createVersion = async (req: Request, res: Response, next: NextFunction) =>
 
         const userId = req.user?.id
         const userName = req.user?.name || req.user?.email
+        const workspaceId = req.user?.activeWorkspaceId
 
         const apiResponse = await chatflowVersionService.createVersion({
             chatFlowId: req.params.chatflowId,
             flowData: req.body.flowData ? (typeof req.body.flowData === 'string' ? req.body.flowData : JSON.stringify(req.body.flowData)) : undefined,
             changeDescription: req.body.changeDescription,
-            createdBy: userName || userId
+            createdBy: userName || userId,
+            workspaceId
         })
 
         // Git Sync: serialize version to file and commit as the logged-in user
         try {
-            const gitService = await getGitSyncService()
-            if (gitService.isEnabled() && gitService.isInitialized()) {
-                const serializer = getGitFileSerializer()
+            const gitService = workspaceId ? await getGitSyncService(workspaceId) : null
+            if (gitService && gitService.isEnabled() && gitService.isInitialized()) {
+                const serializer = getGitFileSerializer(workspaceId!)
                 const entityType = apiResponse.chatFlow?.type === 'AGENTFLOW' ? 'agentflows' : 'chatflows'
 
                 const actualVersion = serializer.safeWriteVersion(entityType, apiResponse.chatFlowId, apiResponse.version, {
@@ -98,7 +100,7 @@ const createVersion = async (req: Request, res: Response, next: NextFunction) =>
 
                 const author = getAuthorFromUser(req.user)
                 const flowName = apiResponse.chatFlow?.name || apiResponse.chatFlowName || `Chatflow ${apiResponse.chatFlowId.substring(0, 8)}`
-                const flowDir = `${entityType}/${apiResponse.chatFlowId}`
+                const flowDir = `workspaces/${workspaceId}/${entityType}/${apiResponse.chatFlowId}`
                 await gitService.commit(
                     entityType,
                     apiResponse.chatFlowId,
@@ -137,9 +139,9 @@ const restoreVersion = async (req: Request, res: Response, next: NextFunction) =
 
         // Git Sync: commit the restore action as the logged-in user
         try {
-            const gitService = await getGitSyncService()
-            if (gitService.isEnabled() && gitService.isInitialized()) {
-                const serializer = getGitFileSerializer()
+            const gitService = workspaceId ? await getGitSyncService(workspaceId) : null
+            if (gitService && gitService.isEnabled() && gitService.isInitialized()) {
+                const serializer = getGitFileSerializer(workspaceId!)
                 const entityType = (apiResponse.chatFlow?.type || apiResponse.chatFlowType) === 'AGENTFLOW' ? 'agentflows' : 'chatflows'
 
                 // chatFlow join may be null for restored-from-deleted flows at the
@@ -166,7 +168,7 @@ const restoreVersion = async (req: Request, res: Response, next: NextFunction) =
                 })
 
                 const author = getAuthorFromUser(req.user)
-                const flowDir = `${entityType}/${apiResponse.chatFlowId}`
+                const flowDir = `workspaces/${workspaceId}/${entityType}/${apiResponse.chatFlowId}`
                 await gitService.commit(
                     entityType,
                     apiResponse.chatFlowId,
@@ -219,10 +221,11 @@ const deleteVersion = async (req: Request, res: Response, next: NextFunction) =>
         }
 
         // Fetch version details before deletion (needed for Git sync)
+        const workspaceId = req.user?.activeWorkspaceId
         let versionInfo: { chatFlowId: string; version: number; chatFlowType?: string; chatFlowName?: string } | null = null
+        const gitService = workspaceId ? await getGitSyncService(workspaceId) : null
         try {
-            const gitService = await getGitSyncService()
-            if (gitService.isEnabled() && gitService.isInitialized()) {
+            if (gitService && gitService.isEnabled() && gitService.isInitialized()) {
                 const version = await chatflowVersionService.getVersionById(req.params.versionId)
                 if (version) {
                     const resolvedType = (version.chatFlow?.type || version.chatFlowType) === 'AGENTFLOW' ? 'agentflows' : 'chatflows'
@@ -243,16 +246,15 @@ const deleteVersion = async (req: Request, res: Response, next: NextFunction) =>
         // Git Sync: remove the version file and commit as the logged-in user
         if (versionInfo) {
             try {
-                const gitService = await getGitSyncService()
-                if (gitService.isEnabled() && gitService.isInitialized()) {
-                    const serializer = getGitFileSerializer()
+                if (gitService && gitService.isEnabled() && gitService.isInitialized()) {
+                    const serializer = getGitFileSerializer(workspaceId!)
                     const entityType = versionInfo.chatFlowType || 'chatflows'
 
                     serializer.deleteVersion(entityType, versionInfo.chatFlowId, versionInfo.version)
 
                     const author = getAuthorFromUser(req.user)
                     const flowName = versionInfo.chatFlowName || `Chatflow ${versionInfo.chatFlowId.substring(0, 8)}`
-                    const flowDir = `${entityType}/${versionInfo.chatFlowId}`
+                    const flowDir = `workspaces/${workspaceId}/${entityType}/${versionInfo.chatFlowId}`
                     await gitService.commit(
                         entityType,
                         versionInfo.chatFlowId,

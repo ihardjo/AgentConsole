@@ -1,6 +1,6 @@
-import { GitSyncService, GitSyncConfig, GitAuthor, gitSyncRepoPath } from './GitSyncService'
+import { GitSyncService, GitSyncConfig, GitAuthor, getWorkspaceRepoPath } from './GitSyncService'
 import { GitFileSerializer } from './GitFileSerializer'
-import configManager from './GitSyncConfigManager'
+import { getWorkspaceConfigManager, listWorkspaceConfigIds } from './GitSyncConfigManager'
 import { getRunningExpressApp } from '../../utils/getRunningExpressApp'
 import { ChatFlowVersion } from '../../database/entities/ChatFlowVersion'
 import { ChatFlow } from '../../database/entities/ChatFlow'
@@ -9,15 +9,35 @@ import path from 'node:path'
 import logger from '../../utils/logger'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Singleton instances
+// Shared constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-let serviceInstance: GitSyncService | null = null
-let serializerInstance: GitFileSerializer | null = null
+/**
+ * Optional config-like fields that exist on both ChatFlowVersion and the
+ * serialised JSON.  Centralised here so the two sync directions (DB→Git and
+ * Git→DB) always handle the same set of fields without diverging over time.
+ */
+const CONFIG_FIELDS = [
+    'chatbotConfig',
+    'apiConfig',
+    'analytic',
+    'category',
+    'speechToText',
+    'followUpPrompts',
+    'textToSpeech'
+] as const
+
+type ConfigField = (typeof CONFIG_FIELDS)[number]
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Per-workspace singleton maps
+// ─────────────────────────────────────────────────────────────────────────────
+
+const serviceMap = new Map<string, GitSyncService>()
+const serializerMap = new Map<string, GitFileSerializer>()
 
 /**
  * Returns a safe disabled-by-default config.
- * Used when no persisted config exists yet (first run).
  */
 function defaultConfig(): GitSyncConfig {
     return {
@@ -31,137 +51,196 @@ function defaultConfig(): GitSyncConfig {
 }
 
 /**
- * Load config exclusively from the persisted config file.
- * Returns safe disabled defaults when no config file exists yet.
+ * Load persisted config for a workspace, or return safe defaults.
  */
-async function buildConfig(): Promise<GitSyncConfig> {
-    const persisted = await configManager.load()
-    if (persisted) {
-        return persisted
+async function buildConfig(workspaceId: string): Promise<GitSyncConfig> {
+    const persisted = await getWorkspaceConfigManager(workspaceId).load()
+    return persisted ?? defaultConfig()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Internal helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Extract the serialisable subset of a ChatFlowVersion for writing to git.
+ * Centralises the field list so DB→Git and Git→DB always stay in sync.
+ */
+function toVersionPayload(version: ChatFlowVersion, chatflow: ChatFlow | null): Record<string, unknown> {
+    return {
+        id: version.id,
+        chatFlowId: version.chatFlowId,
+        chatFlowName: chatflow?.name || version.chatFlowName,
+        chatFlowType: chatflow?.type || version.chatFlowType,
+        version: version.version,
+        flowData: version.flowData,
+        changeDescription: version.changeDescription,
+        createdBy: version.createdBy,
+        createdDate: version.createdDate,
+        updatedDate: version.updatedDate,
+        ...Object.fromEntries(CONFIG_FIELDS.map((f) => [f, version[f]]))
     }
-    return defaultConfig()
 }
 
 /**
- * Get (or create) the singleton GitSyncService.
- * If the service has not been created yet, loads persisted config asynchronously.
+ * Shared conflict-resolution handler used by both sync directions.
+ * Attempts to auto-resolve conflicts, logs the outcome, and swallows
+ * resolution errors so the caller can decide how to proceed.
  */
-export async function getGitSyncService(): Promise<GitSyncService> {
-    if (!serviceInstance) {
-        const config = await buildConfig()
-        serviceInstance = new GitSyncService(config)
+async function tryResolveConflicts(service: GitSyncService, workspaceId: string): Promise<void> {
+    try {
+        const resolution = await service.resolveConflicts()
+        logger.info(`[GitSync:${workspaceId}] Auto-resolved ${resolution.resolved.length} conflict(s)`)
+    } catch (resolveErr) {
+        logger.warn(`[GitSync:${workspaceId}] Conflict auto-resolution failed: ${resolveErr}`)
     }
-    return serviceInstance
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Public API — all functions require workspaceId
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Get (or create) the GitSyncService for a specific workspace.
+ */
+export async function getGitSyncService(workspaceId: string): Promise<GitSyncService> {
+    let service = serviceMap.get(workspaceId)
+    if (!service) {
+        const config = await buildConfig(workspaceId)
+        const repoPath = getWorkspaceRepoPath(workspaceId)
+        service = new GitSyncService(config, repoPath)
+        serviceMap.set(workspaceId, service)
+    }
+    return service
 }
 
 /**
- * Get the current Git Sync config (with token masked).
- * Returns a default config object when the service has not yet been created.
+ * Get the current Git Sync config for a workspace (with token masked).
  */
-export async function getGitSyncConfig(): Promise<ReturnType<GitSyncService['getConfig']>> {
-    if (serviceInstance) {
-        return serviceInstance.getConfig()
+export async function getGitSyncConfig(workspaceId: string): Promise<ReturnType<GitSyncService['getConfig']>> {
+    const service = serviceMap.get(workspaceId)
+    if (service) {
+        return service.getConfig()
     }
-    const defaults = await buildConfig()
+    const defaults = await buildConfig(workspaceId)
     return { ...defaults, accessToken: defaults.accessToken ? '••••••••' : '' }
 }
 
 /**
- * Wipe all persistent Git Sync state: config file on disk AND the local git repo.
- * Called when the user explicitly disables Git Sync.
+ * Wipe all persistent Git Sync state for a workspace: config file + local git repo.
  */
-export async function clearGitSync(): Promise<void> {
-    if (serviceInstance) {
-        await serviceInstance.clearConfig()
+export async function clearGitSync(workspaceId: string): Promise<void> {
+    const service = serviceMap.get(workspaceId)
+    if (service) {
+        await service.clearConfig()
     }
-    // Remove the persisted config file so the next startup starts fresh
-    await configManager.clear()
-    // Reset singletons so next request starts from defaults
-    serviceInstance = null
-    serializerInstance = null
-    logger.info('[GitSync] All persistent Git Sync data cleared')
+    getWorkspaceConfigManager(workspaceId).clear()
+    serviceMap.delete(workspaceId)
+    serializerMap.delete(workspaceId)
+    logger.info(`[GitSync:${workspaceId}] All persistent Git Sync data cleared`)
 }
 
 /**
- * Replace the singleton with a new service after a runtime config change.
- * Persists the new configuration to disk with encrypted credentials.
+ * Apply a partial config update for a workspace, persist, and re-initialise.
  */
-export async function resetGitSync(partial: Partial<GitSyncConfig>): Promise<void> {
-    // Ensure the singleton exists before updating
-    const service = await getGitSyncService()
+export async function resetGitSync(workspaceId: string, partial: Partial<GitSyncConfig>): Promise<void> {
+    const service = await getGitSyncService(workspaceId)
     await service.updateConfig(partial)
 
-    // Persist the full resolved config to disk (encrypted)
     const resolvedConfig = service.getFullConfig()
-    await configManager.save(resolvedConfig)
+    await getWorkspaceConfigManager(workspaceId).save(resolvedConfig)
 
-    // Re-create serializer for potentially new repoPath
-    serializerInstance = null
-    getGitFileSerializer()
+    // Invalidate cached serializer — repoPath may have changed
+    serializerMap.delete(workspaceId)
 
-    // When git sync is (re-)enabled and initialized, sync all DB versions
-    // into the local repo so the first commit contains the full state.
-    // This does NOT push — the user must push manually.
     if (service.isEnabled() && service.isInitialized()) {
         try {
             const author: GitAuthor = { name: 'Agent Console Bot', email: 'agentconsole@system' }
-            const result = await syncDatabaseToLocalGit(author)
+            const result = await syncDatabaseToLocalGit(workspaceId, author)
             if (result.versionsWritten > 0) {
-                logger.info(`[GitSync] Config-change sync wrote ${result.versionsWritten} versions to git`)
+                logger.info(`[GitSync:${workspaceId}] Config-change sync wrote ${result.versionsWritten} versions to git`)
             }
         } catch (syncError) {
-            logger.warn(`[GitSync] Post-config DB-to-git sync failed (non-fatal): ${syncError}`)
+            logger.warn(`[GitSync:${workspaceId}] Post-config DB-to-git sync failed (non-fatal): ${syncError}`)
         }
     }
 }
 
 /**
- * Get (or create) the singleton GitFileSerializer.
+ * Get (or create) the GitFileSerializer for a specific workspace.
  */
-export function getGitFileSerializer(): GitFileSerializer {
-    if (!serializerInstance) {
-        serializerInstance = new GitFileSerializer(gitSyncRepoPath)
+export function getGitFileSerializer(workspaceId: string): GitFileSerializer {
+    let serializer = serializerMap.get(workspaceId)
+    if (!serializer) {
+        serializer = new GitFileSerializer(getWorkspaceRepoPath(workspaceId), workspaceId)
+        serializerMap.set(workspaceId, serializer)
     }
-    return serializerInstance
+    return serializer
 }
 
 /**
  * Initialize Git Sync at server startup.
- * Should be called from the main App initialization flow.
+ * Discovers all workspace config files on disk and bootstraps each workspace that has
+ * Git Sync enabled.  This replaces the old single-workspace initGitSync() call.
+ *
+ * Boot strategy per workspace:
+ *   1. Init the local repo (fetch + checkout from remote when repo is brand-new).
+ *   2. If the local DB already has versions → push them up (DB is the source of truth).
+ *   3. If the local DB is empty → pull from remote and import into DB (remote is the
+ *      source of truth, e.g. first boot after cloning from another instance).
  */
 export async function initGitSync(): Promise<void> {
-    const config = await buildConfig()
+    const workspaceIds = listWorkspaceConfigIds()
 
-    if (!config.enabled) {
-        // No persisted enabled config — Git Sync will be configured at runtime via the UI
+    if (workspaceIds.length === 0) {
         return
     }
 
-    const service = await getGitSyncService()
-    await service.init()
+    const author: GitAuthor = { name: 'Agent Console Bot', email: 'agentconsole@system' }
 
-    // Also pre-create the serializer
-    getGitFileSerializer()
+    for (const workspaceId of workspaceIds) {
+        try {
+            const service = await getGitSyncService(workspaceId)
+            if (!service.isEnabled()) continue
 
-    // Sync all existing DB versions into the local git repo so the
-    // initial commit contains the full database state.  This is a
-    // no-op if the repo already has the versions serialized.
-    try {
-        const author: GitAuthor = { name: 'Agent Console Bot', email: 'agentconsole@system' }
-        const result = await syncDatabaseToLocalGit(author)
-        if (result.versionsWritten > 0) {
-            logger.info(`[GitSync] Initial sync wrote ${result.versionsWritten} versions to git`)
+            await service.init()
+
+            // Count local versions without loading all data
+            const appServer = getRunningExpressApp()
+            const versionRepo = appServer.AppDataSource.getRepository(ChatFlowVersion)
+            const localVersionCount = await versionRepo.count({ where: { workspaceId } })
+
+            if (localVersionCount === 0) {
+                // ── Empty DB: pull from remote and import ─────────────────
+                // The local repo was already bootstrapped (fetched) during init(),
+                // so syncRemoteGitToDatabase only needs to parse files + upsert rows.
+                logger.info(`[GitSync:${workspaceId}] Local DB is empty — pulling from remote`)
+                try {
+                    const pullResult = await syncRemoteGitToDatabase(workspaceId)
+                    logger.info(
+                        `[GitSync:${workspaceId}] Remote pull imported ${pullResult.versionsImported} version(s), ` +
+                        `created ${pullResult.flowsCreated} flow(s)`
+                    )
+                } catch (pullError) {
+                    logger.warn(`[GitSync:${workspaceId}] Remote pull on empty DB failed (non-fatal): ${pullError}`)
+                }
+            } else {
+                // ── DB has data: commit and push local state ───────────────
+                const result = await syncDatabaseToLocalGit(workspaceId, author)
+                if (result.versionsWritten > 0) {
+                    logger.info(`[GitSync:${workspaceId}] Initial sync wrote ${result.versionsWritten} versions to git`)
+                }
+            }
+
+            logger.info(`[GitSync:${workspaceId}] Git sync initialized successfully`)
+        } catch (initError) {
+            logger.warn(`[GitSync:${workspaceId}] Initialization failed (non-fatal): ${initError}`)
         }
-    } catch (initSyncError) {
-        logger.warn(`[GitSync] Initial DB-to-git sync failed (non-fatal): ${initSyncError}`)
     }
-
-    logger.info('[GitSync] Git sync initialized successfully')
 }
 
 /**
  * Helper to extract GitAuthor from the Express `req.user` object.
- * Falls back to a system author if user info is unavailable.
  */
 export function getAuthorFromUser(user?: { name?: string; email?: string; id?: string }): GitAuthor {
     return {
@@ -171,108 +250,88 @@ export function getAuthorFromUser(user?: { name?: string; email?: string; id?: s
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Initial Sync Operations
+// Sync Operations — workspace-scoped
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Serialize all local chatflow versions from the database to the git
- * repository working tree, then commit (and merge remote for the very
- * first commit on an unborn branch).
+ * Serialize all chatflow versions belonging to `workspaceId` from the database
+ * to the workspace git repo, then commit.
  *
- * **Does NOT push.**  The caller is responsible for pushing when
- * appropriate (e.g. the explicit Push button / endpoint).
+ * **Does NOT push.**
  */
-export async function syncDatabaseToLocalGit(author: GitAuthor): Promise<{ versionsWritten: number; committed: boolean }> {
-    const service = await getGitSyncService()
+export async function syncDatabaseToLocalGit(
+    workspaceId: string,
+    author: GitAuthor
+): Promise<{ versionsWritten: number; committed: boolean }> {
+    const service = await getGitSyncService(workspaceId)
     if (!service.isEnabled() || !service.isInitialized()) {
-        throw new Error('Git sync is not enabled or not initialized')
+        throw new Error(`Git sync is not enabled or not initialized for workspace ${workspaceId}`)
     }
 
-    const serializer = getGitFileSerializer()
+    const serializer = getGitFileSerializer(workspaceId)
     const appServer = getRunningExpressApp()
     const versionRepo = appServer.AppDataSource.getRepository(ChatFlowVersion)
-    const flowRepo = appServer.AppDataSource.getRepository(ChatFlow)
 
-    // Get all versions from the database
+    // Fetch all versions owned by this workspace — uses the denormalized
+    // workspaceId column directly so orphaned versions (deleted chatflows)
+    // are also included and preserved in git.
     const versions = await versionRepo
         .createQueryBuilder('version')
         .leftJoinAndSelect('version.chatFlow', 'chatFlow')
+        .where('version.workspaceId = :workspaceId', { workspaceId })
         .orderBy('version.chatFlowId', 'ASC')
         .addOrderBy('version.version', 'ASC')
         .getMany()
 
     if (versions.length === 0) {
-        logger.debug('[GitSync] No local versions to sync to git')
+        logger.debug(`[GitSync:${workspaceId}] No local versions to sync to git`)
         return { versionsWritten: 0, committed: false }
     }
 
-    let versionsWritten = 0
-
-    // Group by chatflow and write each version
     const chatflowIds = [...new Set(versions.map((v) => v.chatFlowId))]
 
-    // Batch-fetch all referenced chatflows in one query (avoids N+1)
-    const chatflows = await flowRepo.find({ where: chatflowIds.map((id) => ({ id })) })
-    const chatflowMap = new Map(chatflows.map((cf) => [cf.id, cf]))
+    // Build chatflow lookup from the LEFT-JOINed version.chatFlow relation.
+    // For orphaned versions (deleted chatflows) chatFlow will be null —
+    // the serializer falls back to the embedded chatFlowType / chatFlowName.
+    const chatflowMap = new Map<string, ChatFlow>()
+    for (const v of versions) {
+        if (v.chatFlow && !chatflowMap.has(v.chatFlowId)) {
+            chatflowMap.set(v.chatFlowId, v.chatFlow)
+        }
+    }
+
+    let versionsWritten = 0
 
     for (const chatflowId of chatflowIds) {
         const chatflow = chatflowMap.get(chatflowId) ?? null
         const entityType = chatflow?.type === 'AGENTFLOW' ? 'agentflows' : 'chatflows'
 
-        // Write each version
-        const chatflowVersions = versions.filter((v) => v.chatFlowId === chatflowId)
-        for (const version of chatflowVersions) {
-            serializer.safeWriteVersion(entityType, chatflowId, version.version, {
-                id: version.id,
-                chatFlowId: version.chatFlowId,
-                chatFlowName: chatflow?.name || version.chatFlowName,
-                chatFlowType: chatflow?.type || version.chatFlowType,
-                version: version.version,
-                flowData: version.flowData,
-                changeDescription: version.changeDescription,
-                createdBy: version.createdBy,
-                createdDate: version.createdDate,
-                updatedDate: version.updatedDate,
-                chatbotConfig: version.chatbotConfig,
-                apiConfig: version.apiConfig,
-                analytic: version.analytic,
-                category: version.category,
-                speechToText: version.speechToText,
-                followUpPrompts: version.followUpPrompts,
-                textToSpeech: version.textToSpeech
-            })
+        for (const version of versions.filter((v) => v.chatFlowId === chatflowId)) {
+            serializer.safeWriteVersion(entityType, chatflowId, version.version, toVersionPayload(version, chatflow))
             versionsWritten++
         }
     }
 
-    // ── Dirty check ────────────────────────────────────────────────────────
-    // After writing files, inspect the working tree.  If nothing changed on
-    // disk (all files were identical to what was already committed) there is
-    // nothing to commit.  This prevents noisy empty "SYNC" commits on every
-    // server restart when the repo is already up to date.
     const isInitial = !(await service.hasLocalCommits())
     if (!isInitial) {
         const treeStatus = await service.getStatus()
         if (treeStatus?.isClean()) {
-            logger.debug('[GitSync] Working tree is clean — no changes to commit, skipping')
+            logger.debug(`[GitSync:${workspaceId}] Working tree is clean — no changes to commit, skipping`)
             return { versionsWritten, committed: false }
         }
     }
 
-    // Build a descriptive commit message with counts
     const flowCount = chatflowIds.length
     const syncLabel = isInitial ? 'INIT' : 'SYNC'
     const syncMessage =
         `[AgentOps] ${syncLabel}: ${flowCount} flow${flowCount !== 1 ? 's' : ''}, ` +
         `${versionsWritten} version${versionsWritten !== 1 ? 's' : ''}\n\n` +
+        `Workspace: ${workspaceId}\n` +
         `Flows: ${flowCount}\n` +
         `Versions: ${versionsWritten}\n` +
         `Author: ${author.name} <${author.email}>\n` +
         `Timestamp: ${new Date().toISOString()}`
 
-    // For the very first commit (unborn branch) we must commit locally
-    // before pulling, because `git pull` fails on an unborn branch.
-    // For subsequent syncs we pull first, then commit (pullAndCommit).
     let committed = false
     try {
         const commitResult = isInitial
@@ -282,19 +341,17 @@ export async function syncDatabaseToLocalGit(author: GitAuthor): Promise<{ versi
     } catch (error) {
         const errMsg = (error as Error).message || String(error)
         if (errMsg.startsWith('CONFLICTS:')) {
-            logger.warn(`[GitSync] Merge conflicts detected during pullAndCommit — auto-resolving`)
+            logger.warn(`[GitSync:${workspaceId}] Merge conflicts detected during pullAndCommit — auto-resolving`)
+            await tryResolveConflicts(service, workspaceId)
             try {
-                const resolution = await service.resolveConflicts()
-                logger.info(`[GitSync] Auto-resolved ${resolution.resolved.length} conflict(s) before commit`)
-                // Re-attempt with a post-resolution message
                 const retryMessage = syncMessage.replace('SYNC:', 'SYNC (post-conflict resolution):')
                 const retryResult = await service.pullAndCommit(retryMessage, author)
                 committed = !!retryResult
-            } catch (resolveErr) {
-                logger.warn(`[GitSync] Pre-commit conflict resolution failed: ${resolveErr}`)
+            } catch (retryErr) {
+                logger.warn(`[GitSync:${workspaceId}] Retry after conflict resolution failed: ${retryErr}`)
             }
         } else {
-            logger.error(`[GitSync] pullAndCommit failed: ${error}`)
+            logger.error(`[GitSync:${workspaceId}] pullAndCommit failed: ${error}`)
         }
     }
 
@@ -302,23 +359,29 @@ export async function syncDatabaseToLocalGit(author: GitAuthor): Promise<{ versi
 }
 
 /**
- * Pull all versions from the git remote, parse the JSON files,
- * and upsert them into the local database (chat_flow_version table).
+ * Pull all versions from the git remote for `workspaceId`, parse every JSON
+ * version file found in the repo (across ALL workspace subdirectories), and
+ * upsert them into the local database — all flows are re-homed to `workspaceId`.
  *
- * If a chatflow/agentflow exists in the git repo but not in the local DB,
- * it will be created from the latest version_N.json file so that the pulled
- * versions are visible immediately without a manual re-creation step.
+ * This allows a repo that was originally pushed from a different workspace ID
+ * (e.g. migrating environments) to be fully imported into the current workspace.
  *
- * @param workspaceId  The workspace to assign newly-created chatflows to.
- *                     Required for flows that don't yet exist in the local DB.
+ * Flows found in git that don't exist in the DB are created and assigned to `workspaceId`.
+ * Flows found in git that already exist under a DIFFERENT workspaceId are re-assigned
+ * to `workspaceId` on import so they become visible in the current workspace.
  */
-export async function syncRemoteGitToDatabase(workspaceId?: string): Promise<{ versionsImported: number; flowsCreated: number; pulled: boolean }> {
-    const service = await getGitSyncService()
+export async function syncRemoteGitToDatabase(
+    workspaceId: string
+): Promise<{ versionsImported: number; flowsCreated: number; pulled: boolean }> {
+    const service = await getGitSyncService(workspaceId)
     if (!service.isEnabled() || !service.isInitialized()) {
-        throw new Error('Git sync is not enabled or not initialized')
+        throw new Error(`Git sync is not enabled or not initialized for workspace ${workspaceId}`)
     }
 
-    // Pull from remote first
+    // Use the serializer to derive the shared repo's `workspaces/` root.
+    // We scan ALL subdirs under it, not just this workspace's own subtree.
+    const serializer = getGitFileSerializer(workspaceId)
+
     let pulled = false
     try {
         await service.pull()
@@ -326,19 +389,11 @@ export async function syncRemoteGitToDatabase(workspaceId?: string): Promise<{ v
     } catch (error) {
         const errMsg = (error as Error).message || String(error)
         if (errMsg.startsWith('CONFLICTS:')) {
-            // Auto-resolve merge conflicts before importing
-            logger.warn(`[GitSync] Merge conflicts detected after pull — attempting auto-resolution`)
-            try {
-                const resolution = await service.resolveConflicts()
-                logger.info(`[GitSync] Auto-resolved ${resolution.resolved.length} conflict(s)`)
-                pulled = true
-            } catch (resolveErr) {
-                logger.error(`[GitSync] Auto-resolution failed: ${resolveErr}`)
-                // Still continue — import whatever is in the working tree
-            }
+            logger.warn(`[GitSync:${workspaceId}] Merge conflicts detected after pull — attempting auto-resolution`)
+            await tryResolveConflicts(service, workspaceId)
+            pulled = true
         } else {
-            logger.warn(`[GitSync] Pull during syncRemoteGitToDatabase failed: ${error}`)
-            // Continue — there may be local files to import even if pull fails
+            logger.warn(`[GitSync:${workspaceId}] Pull during syncRemoteGitToDatabase failed: ${error}`)
         }
     }
 
@@ -349,215 +404,227 @@ export async function syncRemoteGitToDatabase(workspaceId?: string): Promise<{ v
     let versionsImported = 0
     let flowsCreated = 0
 
-    // Scan the repo directory for entity type folders
-    const entityTypes = ['chatflows', 'agentflows']
+    const entityTypes = ['chatflows', 'agentflows'] as const
 
-    // Collect all chatflow IDs across entity types first for batch query
+    // ── Collect every chatflow directory across ALL workspace subdirs ──────────
+    // The remote repo may have been pushed from a workspace with a different ID.
+    // We scan the entire `workspaces/` root so that every version file is imported
+    // and re-homed to the current `workspaceId`.
+    const repoWorkspacesRoot = path.dirname(serializer.workspaceDir) // <repoPath>/workspaces/
+
+    // Gather all workspace subdirectory names (may include our own and foreign ones)
+    const workspaceSubdirs: string[] = fs.existsSync(repoWorkspacesRoot)
+        ? fs.readdirSync(repoWorkspacesRoot, { withFileTypes: true })
+              .filter((d) => d.isDirectory())
+              .map((d) => d.name)
+        : []
+
+    // Build a flat list of { workspaceSrcId, entityType, chatflowId, dir } tuples
     const allChatflowIds: string[] = []
-    for (const entityType of entityTypes) {
-        const entityDir = path.join(gitSyncRepoPath, entityType)
-        if (!fs.existsSync(entityDir)) continue
-        const dirs = fs.readdirSync(entityDir, { withFileTypes: true })
-            .filter((d) => d.isDirectory())
-            .map((d) => d.name)
-        allChatflowIds.push(...dirs)
+    type ChatflowEntry = { workspaceSrcId: string; entityType: typeof entityTypes[number]; chatflowId: string; dir: string }
+    const chatflowEntries: ChatflowEntry[] = []
+
+    for (const wsSrcId of workspaceSubdirs) {
+        for (const entityType of entityTypes) {
+            const entityDir = path.join(repoWorkspacesRoot, wsSrcId, entityType)
+            if (!fs.existsSync(entityDir)) continue
+            fs.readdirSync(entityDir, { withFileTypes: true })
+                .filter((d) => d.isDirectory())
+                .forEach((d) => {
+                    allChatflowIds.push(d.name)
+                    chatflowEntries.push({
+                        workspaceSrcId: wsSrcId,
+                        entityType,
+                        chatflowId: d.name,
+                        dir: path.join(entityDir, d.name)
+                    })
+                })
+        }
     }
 
-    // Batch-fetch all referenced chatflows + versions in one query each (avoids N+1)
-    const existingFlows = allChatflowIds.length > 0
-        ? await flowRepo.find({ where: allChatflowIds.map((id) => ({ id })) })
-        : []
+    if (allChatflowIds.length === 0) {
+        logger.debug(`[GitSync:${workspaceId}] No chatflow directories found in repo`)
+        return { versionsImported, flowsCreated, pulled }
+    }
+
+    // Batch-fetch all referenced chatflows so we can detect create-vs-update
+    const existingFlows = await flowRepo.find({ where: allChatflowIds.map((id) => ({ id })) })
     const flowMap = new Map(existingFlows.map((cf) => [cf.id, cf]))
 
-    const existingVersions = allChatflowIds.length > 0
-        ? await versionRepo.find({
-            where: allChatflowIds.map((id) => ({ chatFlowId: id })),
-            select: [
-                'id', 'chatFlowId', 'version', 'flowData', 'changeDescription', 'createdBy',
-                'chatFlowName', 'chatFlowType',
-                'chatbotConfig', 'apiConfig', 'analytic', 'category',
-                'speechToText', 'followUpPrompts', 'textToSpeech'
-            ]
-        })
-        : []
-    // Key: "chatflowId:versionNumber"
+    const existingVersions = await versionRepo.find({
+        where: allChatflowIds.map((id) => ({ chatFlowId: id })),
+        select: [
+            'id', 'chatFlowId', 'version', 'flowData', 'changeDescription', 'createdBy',
+            'chatFlowName', 'chatFlowType',
+            ...CONFIG_FIELDS
+        ]
+    })
     const versionMap = new Map(existingVersions.map((v) => [`${v.chatFlowId}:${v.version}`, v]))
 
-    for (const entityType of entityTypes) {
-        const entityDir = path.join(gitSyncRepoPath, entityType)
-        if (!fs.existsSync(entityDir)) continue
+    // Accumulate all version entities to upsert — flushed in a single bulk save at the end
+    const versionsToSave: ChatFlowVersion[] = []
 
-        const chatflowDirs = fs.readdirSync(entityDir, { withFileTypes: true })
-            .filter((d) => d.isDirectory())
-            .map((d) => d.name)
+    for (const { workspaceSrcId, entityType, chatflowId, dir: chatflowDir } of chatflowEntries) {
+        let chatflow = flowMap.get(chatflowId) ?? null
 
-        for (const chatflowId of chatflowDirs) {
-            const chatflowDir = path.join(entityDir, chatflowId)
+        // ── Re-home cross-workspace flows ────────────────────────────────────
+        // If this flow was pushed from a different workspace (workspaceSrcId ≠ workspaceId),
+        // we still import it — all flows are re-assigned to the local workspaceId.
+        // This makes the pull workspace-ID-agnostic, so repos migrated from other
+        // environments import fully instead of being silently skipped.
+        if (chatflow && chatflow.workspaceId !== workspaceId) {
+            logger.info(
+                `[GitSync:${workspaceId}] Re-homing chatflow ${chatflowId} from ` +
+                `workspace ${chatflow.workspaceId} → ${workspaceId} (source dir: ${workspaceSrcId})`
+            )
+            chatflow.workspaceId = workspaceId
+            chatflow = await flowRepo.save(chatflow)
+            flowMap.set(chatflowId, chatflow)
+        }
 
-            // Check if this chatflow exists in the DB (from pre-fetched map)
-            let chatflow = flowMap.get(chatflowId) ?? null
+        const versionFiles = fs.readdirSync(chatflowDir)
+            .filter((f) => f.startsWith('version_') && f.endsWith('.json'))
+            .sort()
 
-            // Read version files once — reused for create, update, and upsert passes below
-            const versionFiles = fs.readdirSync(chatflowDir)
-                .filter((f) => f.startsWith('version_') && f.endsWith('.json'))
-                .sort()
+        if (!chatflow) {
+            // ── Create the ChatFlow from the latest version_N.json ──────────
+            if (versionFiles.length === 0) {
+                logger.warn(`[GitSync:${workspaceId}] Skipping ${chatflowId} — no version files and not in DB`)
+                continue
+            }
 
-            if (!chatflow) {
-                // ── Recreate the ChatFlow from the latest version_N.json ──
-                // version_N.json is the canonical source of truth: it contains
-                // chatFlowId, chatFlowName, chatFlowType, flowData and all 7
-                // config fields captured at save time — exactly like restoreVersion.
-                if (versionFiles.length === 0) {
-                    logger.warn(`[GitSync] Skipping import for chatflow ${chatflowId} — not found in local DB and no version files`)
-                    continue
-                }
+            try {
+                const latestVersion = JSON.parse(
+                    fs.readFileSync(path.join(chatflowDir, versionFiles[versionFiles.length - 1]), 'utf-8')
+                )
 
+                const chatflowType = entityType === 'agentflows'
+                    ? 'AGENTFLOW'
+                    : (latestVersion.chatFlowType || 'CHATFLOW')
+
+                const newChatflow = flowRepo.create({
+                    id: chatflowId,
+                    name: latestVersion.chatFlowName || `Imported ${chatflowId.substring(0, 8)}`,
+                    flowData: latestVersion.flowData || '{}',
+                    type: chatflowType,
+                    deployed: false,
+                    isPublic: false,
+                    workspaceId,
+                    ...Object.fromEntries(CONFIG_FIELDS.map((f) => [f, latestVersion[f] ?? null]))
+                })
+
+                chatflow = await flowRepo.save(newChatflow)
+                flowMap.set(chatflowId, chatflow)
+                flowsCreated++
+                logger.info(
+                    `[GitSync:${workspaceId}] Created chatflow ${chatflowId} (${newChatflow.name}) ` +
+                    `from source workspace dir ${workspaceSrcId}`
+                )
+            } catch (error) {
+                logger.error(`[GitSync:${workspaceId}] Failed to create chatflow ${chatflowId}: ${error}`)
+                continue
+            }
+        } else {
+            // ── Update existing chatflow from the latest version file ────────
+            if (versionFiles.length > 0) {
                 try {
                     const latestVersion = JSON.parse(
                         fs.readFileSync(path.join(chatflowDir, versionFiles[versionFiles.length - 1]), 'utf-8')
                     )
 
-                    // workspaceId must be supplied by the caller (from the authenticated request)
-                    if (!workspaceId) {
-                        logger.warn(`[GitSync] Skipping import for chatflow ${chatflowId} — no workspaceId available`)
-                        continue
+                    let updated = false
+
+                    if (latestVersion.chatFlowName && latestVersion.chatFlowName !== chatflow.name) {
+                        chatflow.name = latestVersion.chatFlowName
+                        updated = true
+                    }
+                    if (latestVersion.flowData && latestVersion.flowData !== '{}' && latestVersion.flowData !== chatflow.flowData) {
+                        chatflow.flowData = latestVersion.flowData
+                        updated = true
                     }
 
-                    const chatflowType = entityType === 'agentflows'
-                        ? 'AGENTFLOW'
-                        : (latestVersion.chatFlowType || 'CHATFLOW')
+                    for (const field of CONFIG_FIELDS) {
+                        if (latestVersion[field] !== undefined && latestVersion[field] !== (chatflow as any)[field]) {
+                            ;(chatflow as any)[field] = latestVersion[field]
+                            updated = true
+                        }
+                    }
 
-                    const newChatflow = flowRepo.create({
-                        id: chatflowId,
-                        name: latestVersion.chatFlowName || `Imported ${chatflowId.substring(0, 8)}`,
-                        flowData: latestVersion.flowData || '{}',
-                        type: chatflowType,
-                        deployed: false,
-                        isPublic: false,
-                        chatbotConfig: latestVersion.chatbotConfig || null,
-                        apiConfig: latestVersion.apiConfig || null,
-                        analytic: latestVersion.analytic || null,
-                        category: latestVersion.category || null,
-                        speechToText: latestVersion.speechToText || null,
-                        followUpPrompts: latestVersion.followUpPrompts || null,
-                        textToSpeech: latestVersion.textToSpeech || null,
-                        workspaceId: workspaceId
-                    })
-
-                    chatflow = await flowRepo.save(newChatflow)
-                    flowMap.set(chatflowId, chatflow)
-                    flowsCreated++
-                    logger.info(`[GitSync] Created chatflow ${chatflowId} (${newChatflow.name}) from latest version file`)
+                    if (updated) {
+                        await flowRepo.save(chatflow)
+                        logger.debug(`[GitSync:${workspaceId}] Updated chatflow ${chatflowId} from latest version file`)
+                    }
                 } catch (error) {
-                    logger.error(`[GitSync] Failed to create chatflow ${chatflowId} from version files: ${error}`)
-                    continue
-                }
-            } else {
-                // ── Chatflow exists — update it from the latest version file ──
-                if (versionFiles.length > 0) {
-                    try {
-                        const latestVersion = JSON.parse(
-                            fs.readFileSync(path.join(chatflowDir, versionFiles[versionFiles.length - 1]), 'utf-8')
-                        )
-
-                        let updated = false
-
-                        if (latestVersion.chatFlowName && latestVersion.chatFlowName !== chatflow.name) {
-                            chatflow.name = latestVersion.chatFlowName
-                            updated = true
-                        }
-                        if (latestVersion.flowData && latestVersion.flowData !== '{}' && latestVersion.flowData !== chatflow.flowData) {
-                            chatflow.flowData = latestVersion.flowData
-                            updated = true
-                        }
-
-                        // Sync all 7 config fields
-                        const configFields = ['chatbotConfig', 'apiConfig', 'analytic', 'category', 'speechToText', 'followUpPrompts', 'textToSpeech'] as const
-                        for (const field of configFields) {
-                            if (latestVersion[field] !== undefined && latestVersion[field] !== (chatflow as any)[field]) {
-                                ;(chatflow as any)[field] = latestVersion[field]
-                                updated = true
-                            }
-                        }
-
-                        if (updated) {
-                            await flowRepo.save(chatflow)
-                            logger.info(`[GitSync] Updated chatflow ${chatflowId} from latest version file`)
-                        }
-                    } catch (error) {
-                        logger.warn(`[GitSync] Failed to update chatflow ${chatflowId} from version files: ${error}`)
-                    }
+                    logger.warn(`[GitSync:${workspaceId}] Failed to update chatflow ${chatflowId}: ${error}`)
                 }
             }
+        }
 
-            // Upsert all version_*.json files into the DB
-            const files = versionFiles
+        // ── Collect version files for bulk upsert ───────────────────────────
+        for (const file of versionFiles) {
+            const filePath = path.join(chatflowDir, file)
+            try {
+                const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+                const versionNumber = parseInt(file.replace('version_', '').replace('.json', ''), 10)
+                if (isNaN(versionNumber)) continue
 
-            for (const file of files) {
-                const filePath = path.join(chatflowDir, file)
-                try {
-                    const content = fs.readFileSync(filePath, 'utf-8')
-                    const data = JSON.parse(content)
+                const existing = versionMap.get(`${chatflowId}:${versionNumber}`) ?? null
 
-                    const versionNumber = parseInt(file.replace('version_', '').replace('.json', ''), 10)
-                    if (isNaN(versionNumber)) continue
+                if (existing) {
+                    // Always re-home the version to the local workspaceId
+                    let changed = existing.workspaceId !== workspaceId
+                    if (changed) existing.workspaceId = workspaceId
 
-                    // Check if this version already exists (from pre-fetched map)
-                    const existing = versionMap.get(`${chatflowId}:${versionNumber}`) ?? null
-
-                    if (existing) {
-                        // Update if the git version has newer data
-                        if (data.flowData && data.flowData !== existing.flowData) {
-                            existing.flowData = data.flowData
-                            existing.changeDescription = data.changeDescription || existing.changeDescription
-                            existing.createdBy = data.createdBy || existing.createdBy
-                            existing.chatFlowName = data.chatFlowName || chatflow?.name || existing.chatFlowName
-                            existing.chatFlowType = data.chatFlowType || chatflow?.type || existing.chatFlowType
-                            existing.chatbotConfig = data.chatbotConfig ?? existing.chatbotConfig
-                            existing.apiConfig = data.apiConfig ?? existing.apiConfig
-                            existing.analytic = data.analytic ?? existing.analytic
-                            existing.category = data.category ?? existing.category
-                            existing.speechToText = data.speechToText ?? existing.speechToText
-                            existing.followUpPrompts = data.followUpPrompts ?? existing.followUpPrompts
-                            existing.textToSpeech = data.textToSpeech ?? existing.textToSpeech
-                            await versionRepo.save(existing)
-                            versionsImported++
-                            logger.info(`[GitSync] Updated version ${versionNumber} for ${chatflowId} from git`)
+                    if (data.flowData && data.flowData !== existing.flowData) {
+                        existing.flowData = data.flowData
+                        existing.changeDescription = data.changeDescription || existing.changeDescription
+                        existing.createdBy = data.createdBy || existing.createdBy
+                        existing.chatFlowName = data.chatFlowName || chatflow?.name || existing.chatFlowName
+                        existing.chatFlowType = data.chatFlowType || chatflow?.type || existing.chatFlowType
+                        for (const f of CONFIG_FIELDS) {
+                            existing[f] = data[f] ?? existing[f]
                         }
-                    } else {
-                        // Create new version entry
-                        const newVersion = versionRepo.create({
-                            chatFlowId: chatflowId,
-                            version: versionNumber,
-                            flowData: data.flowData || '{}',
-                            changeDescription: data.changeDescription || `Imported from git`,
-                            createdBy: data.createdBy || 'git-sync',
-                            chatFlowName: data.chatFlowName || chatflow?.name,
-                            chatFlowType: data.chatFlowType || chatflow?.type,
-                            chatbotConfig: data.chatbotConfig || null,
-                            apiConfig: data.apiConfig || null,
-                            analytic: data.analytic || null,
-                            category: data.category || null,
-                            speechToText: data.speechToText || null,
-                            followUpPrompts: data.followUpPrompts || null,
-                            textToSpeech: data.textToSpeech || null
-                        })
-                        await versionRepo.save(newVersion)
-                        versionsImported++
-                        logger.info(`[GitSync] Imported version ${versionNumber} for ${chatflowId} from git`)
+                        changed = true
                     }
-                } catch (error) {
-                    logger.error(`[GitSync] Failed to import ${filePath}: ${error}`)
+
+                    if (changed) {
+                        versionsToSave.push(existing)
+                        versionsImported++
+                        logger.debug(`[GitSync:${workspaceId}] Queued update for version ${versionNumber} of ${chatflowId}`)
+                    }
+                } else {
+                    const newVersion = versionRepo.create({
+                        chatFlowId: chatflowId,
+                        version: versionNumber,
+                        flowData: data.flowData || '{}',
+                        changeDescription: data.changeDescription || 'Imported from git',
+                        createdBy: data.createdBy || 'git-sync',
+                        chatFlowName: data.chatFlowName || chatflow?.name,
+                        chatFlowType: data.chatFlowType || chatflow?.type,
+                        workspaceId,
+                        ...Object.fromEntries(CONFIG_FIELDS.map((f) => [f, data[f] ?? null]))
+                    })
+                    versionsToSave.push(newVersion)
+                    versionsImported++
+                    logger.debug(`[GitSync:${workspaceId}] Queued import for version ${versionNumber} of ${chatflowId}`)
                 }
+            } catch (error) {
+                logger.error(`[GitSync:${workspaceId}] Failed to import ${filePath}: ${error}`)
             }
         }
     }
 
-    logger.info(`[GitSync] Imported ${versionsImported} versions, created ${flowsCreated} new flows from git`)
+    // Flush all version upserts in a single batch write instead of N individual saves
+    if (versionsToSave.length > 0) {
+        await versionRepo.save(versionsToSave)
+    }
+
+    logger.info(`[GitSync:${workspaceId}] Imported ${versionsImported} versions, created ${flowsCreated} new flows`)
     return { versionsImported, flowsCreated, pulled }
 }
 
 // Re-export types
-export { GitSyncService, GitSyncConfig, GitAuthor, GitCommitResult, GitLogEntry, gitSyncRepoPath } from './GitSyncService'
+export { GitSyncService, GitSyncConfig, GitAuthor, getWorkspaceRepoPath } from './GitSyncService'
 export { GitFileSerializer } from './GitFileSerializer'
-export type { GitSyncConfig as PartialGitSyncConfig }
+
+

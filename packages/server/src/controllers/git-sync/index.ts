@@ -9,7 +9,11 @@ import { InternalFlowiseError } from '../../errors/internalFlowiseError'
  */
 const getStatus = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const gitService = await getGitSyncService()
+        const workspaceId = (req as any).user?.activeWorkspaceId as string
+        if (!workspaceId) {
+            return res.status(StatusCodes.BAD_REQUEST).json({ success: false, message: 'No active workspace' })
+        }
+        const gitService = await getGitSyncService(workspaceId)
 
         if (!gitService.isEnabled()) {
             return res.json({ success: true, enabled: false, initialized: false, hasRemote: false, lastError: null, lastSyncAt: null, message: 'Git sync is disabled' })
@@ -33,7 +37,7 @@ const getStatus = async (req: Request, res: Response, next: NextFunction) => {
         // Compare local HEAD vs remote tracking branch to detect divergence.
         // Uses the last-known remote ref (from the most recent fetch/pull/push).
         // The user can click Fetch to refresh the remote ref.
-        const { localHead, remoteHead, outOfSync } = await gitService.getLocalAndRemoteHeads()
+        const { localHead, remoteHead, outOfSync, localAhead, remoteAhead } = await gitService.getLocalAndRemoteHeads()
 
         return res.json({
             success: true,
@@ -46,6 +50,8 @@ const getStatus = async (req: Request, res: Response, next: NextFunction) => {
             hasUncommittedChanges: !status.isClean(),
             conflicted: status.conflicted,
             outOfSync,
+            localAhead,
+            remoteAhead,
             localHead,
             remoteHead,
             data: status
@@ -61,7 +67,11 @@ const getStatus = async (req: Request, res: Response, next: NextFunction) => {
  */
 const getLog = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const gitService = await getGitSyncService()
+        const workspaceId = (req as any).user?.activeWorkspaceId as string
+        if (!workspaceId) {
+            return res.status(StatusCodes.BAD_REQUEST).json({ success: false, message: 'No active workspace' })
+        }
+        const gitService = await getGitSyncService(workspaceId)
 
         if (!gitService.isEnabled()) {
             return res.json({ success: true, enabled: false, data: [] })
@@ -87,7 +97,11 @@ const getDiff = async (req: Request, res: Response, next: NextFunction) => {
             throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'commitHash is required')
         }
 
-        const gitService = await getGitSyncService()
+        const workspaceId = (req as any).user?.activeWorkspaceId as string
+        if (!workspaceId) {
+            return res.status(StatusCodes.BAD_REQUEST).json({ success: false, message: 'No active workspace' })
+        }
+        const gitService = await getGitSyncService(workspaceId)
 
         if (!gitService.isEnabled()) {
             return res.json({ success: true, enabled: false, data: '' })
@@ -106,7 +120,11 @@ const getDiff = async (req: Request, res: Response, next: NextFunction) => {
  */
 const push = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const gitService = await getGitSyncService()
+        const workspaceId = (req as any).user?.activeWorkspaceId as string
+        if (!workspaceId) {
+            return res.status(StatusCodes.BAD_REQUEST).json({ success: false, message: 'No active workspace' })
+        }
+        const gitService = await getGitSyncService(workspaceId)
 
         if (!gitService.isEnabled()) {
             return res.status(StatusCodes.BAD_REQUEST).json({ success: false, message: 'Git sync is disabled' })
@@ -119,7 +137,7 @@ const push = async (req: Request, res: Response, next: NextFunction) => {
         const author = getAuthorFromUser(req.user)
 
         // 1. Serialize all DB versions and commit (does NOT push)
-        const result = await syncDatabaseToLocalGit(author)
+        const result = await syncDatabaseToLocalGit(workspaceId, author)
 
         // 2. Push to remote
         let pushed = false
@@ -146,7 +164,11 @@ const push = async (req: Request, res: Response, next: NextFunction) => {
  */
 const pull = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const gitService = await getGitSyncService()
+        const workspaceId = (req as any).user?.activeWorkspaceId as string
+        if (!workspaceId) {
+            return res.status(StatusCodes.BAD_REQUEST).json({ success: false, message: 'No active workspace' })
+        }
+        const gitService = await getGitSyncService(workspaceId)
 
         if (!gitService.isEnabled()) {
             return res.status(StatusCodes.BAD_REQUEST).json({ success: false, message: 'Git sync is disabled' })
@@ -156,9 +178,6 @@ const pull = async (req: Request, res: Response, next: NextFunction) => {
             return res.status(StatusCodes.BAD_REQUEST).json({ success: false, message: 'Git sync is not initialized' })
         }
 
-        // Pass the caller's active workspace so newly-created chatflows
-        // are assigned to the correct workspace.
-        const workspaceId = (req as any).user?.activeWorkspaceId as string | undefined
         const result = await syncRemoteGitToDatabase(workspaceId)
         return res.json({ success: true, data: result })
     } catch (error) {
@@ -172,7 +191,11 @@ const pull = async (req: Request, res: Response, next: NextFunction) => {
  */
 const fetchRemote = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const gitService = await getGitSyncService()
+        const workspaceId = (req as any).user?.activeWorkspaceId as string
+        if (!workspaceId) {
+            return res.status(StatusCodes.BAD_REQUEST).json({ success: false, message: 'No active workspace' })
+        }
+        const gitService = await getGitSyncService(workspaceId)
 
         if (!gitService.isEnabled()) {
             return res.status(StatusCodes.BAD_REQUEST).json({ success: false, message: 'Git sync is disabled' })
@@ -183,7 +206,17 @@ const fetchRemote = async (req: Request, res: Response, next: NextFunction) => {
         }
 
         await gitService.fetch()
-        return res.json({ success: true, message: 'Fetched successfully', lastSyncAt: gitService.getLastSyncAt() })
+        // Piggy-back ahead/behind counts onto the fetch response so the UI
+        // can refresh the out-of-sync badge without a second getStatus round-trip.
+        const { localAhead, remoteAhead, outOfSync } = await gitService.getLocalAndRemoteHeads()
+        return res.json({
+            success: true,
+            message: 'Fetched successfully',
+            lastSyncAt: gitService.getLastSyncAt(),
+            localAhead,
+            remoteAhead,
+            outOfSync
+        })
     } catch (error) {
         next(error)
     }
@@ -195,7 +228,11 @@ const fetchRemote = async (req: Request, res: Response, next: NextFunction) => {
  */
 const getConfig = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const config = await getGitSyncConfig()
+        const workspaceId = (req as any).user?.activeWorkspaceId as string
+        if (!workspaceId) {
+            return res.status(StatusCodes.BAD_REQUEST).json({ success: false, message: 'No active workspace' })
+        }
+        const config = await getGitSyncConfig(workspaceId)
         return res.json({ success: true, data: config })
     } catch (error) {
         next(error)
@@ -218,6 +255,11 @@ const getConfig = async (req: Request, res: Response, next: NextFunction) => {
  */
 const updateConfig = async (req: Request, res: Response, next: NextFunction) => {
     try {
+        const workspaceId = (req as any).user?.activeWorkspaceId as string
+        if (!workspaceId) {
+            return res.status(StatusCodes.BAD_REQUEST).json({ success: false, message: 'No active workspace' })
+        }
+
         const body = req.body || {}
 
         // Coerce string booleans from form submissions
@@ -237,10 +279,10 @@ const updateConfig = async (req: Request, res: Response, next: NextFunction) => 
             })
         }
 
-        await resetGitSync(partial as any)
+        await resetGitSync(workspaceId, partial as any)
 
-        const updatedConfig = await getGitSyncConfig()
-        const gitService = await getGitSyncService()
+        const updatedConfig = await getGitSyncConfig(workspaceId)
+        const gitService = await getGitSyncService(workspaceId)
 
         return res.json({
             success: true,
@@ -263,7 +305,11 @@ const updateConfig = async (req: Request, res: Response, next: NextFunction) => 
  */
 const disableGitSync = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        await clearGitSync()
+        const workspaceId = (req as any).user?.activeWorkspaceId as string
+        if (!workspaceId) {
+            return res.status(StatusCodes.BAD_REQUEST).json({ success: false, message: 'No active workspace' })
+        }
+        await clearGitSync(workspaceId)
         return res.json({ success: true, message: 'Git Sync disabled and all configuration cleared' })
     } catch (error) {
         next(error)
@@ -278,19 +324,25 @@ const disableGitSync = async (req: Request, res: Response, next: NextFunction) =
  */
 const testConnection = async (req: Request, res: Response, next: NextFunction) => {
     try {
+        const workspaceId = (req as any).user?.activeWorkspaceId as string
+        if (!workspaceId) {
+            return res.status(StatusCodes.BAD_REQUEST).json({ success: false, message: 'No active workspace' })
+        }
         const body = req.body || {}
-        const gitService = await getGitSyncService()
+        const gitService = await getGitSyncService(workspaceId)
 
         // If credentials were supplied in the body, test those directly
         // without persisting them. This covers the "test before save" flow.
         if (body.remoteUrl) {
             // Preserve the existing saved access token if the UI sends the
             // masked placeholder ('••••••••') — i.e. it hasn't changed.
+            // Use getFullConfig() to retrieve the real (unmasked) token.
             const savedConfig = gitService.getConfig()
+            const fullConfig = gitService.getFullConfig()
             const accessToken =
                 body.accessToken && !body.accessToken.includes('•')
                     ? body.accessToken
-                    : savedConfig.accessToken
+                    : fullConfig.accessToken
 
             const result = await gitService.testConnectionWithConfig({
                 remoteUrl: body.remoteUrl,

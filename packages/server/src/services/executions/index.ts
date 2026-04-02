@@ -7,6 +7,7 @@ import { getErrorMessage } from '../../errors/utils'
 import { ExecutionState, IAgentflowExecutedData } from '../../Interface'
 import { _removeCredentialId } from '../../utils'
 import { getRunningExpressApp } from '../../utils/getRunningExpressApp'
+import logger from '../../utils/logger'
 
 export interface ExecutionFilters {
     id?: string
@@ -131,19 +132,37 @@ const updateExecution = async (executionId: string, data: Partial<Execution>, wo
 }
 
 /**
- * Delete multiple executions by their IDs
- * @param executionIds Array of execution IDs to delete
- * @param workspaceId Optional workspace ID to filter executions
- * @returns Object with success status and count of deleted executions
+ * Delete multiple executions by their IDs.
+ * If any of the executions are still INPROGRESS, their running job is aborted
+ * via the AbortControllerPool before the rows are removed.
  */
 const deleteExecutions = async (executionIds: string[], workspaceId?: string): Promise<{ success: boolean; deletedCount: number }> => {
     try {
         const appServer = getRunningExpressApp()
         const executionRepository = appServer.AppDataSource.getRepository(Execution)
 
-        // Create the where condition with workspace filtering if provided
+        // Fetch the rows we are about to delete so we can abort any that are
+        // still running.  We only need agentflowId + sessionId + state.
         const whereCondition: any = { id: In(executionIds) }
         if (workspaceId) whereCondition.workspaceId = workspaceId
+
+        const executions = await executionRepository.find({
+            where: whereCondition,
+            select: ['id', 'agentflowId', 'sessionId', 'state']
+        })
+
+        // Abort any job that is still INPROGRESS.
+        // The AbortControllerPool key mirrors buildChatflow: "<agentflowId>_<chatId>"
+        // where chatId === execution.sessionId.
+        for (const execution of executions) {
+            if (execution.state === 'INPROGRESS') {
+                const abortKey = `${execution.agentflowId}_${execution.sessionId}`
+                if (appServer.abortControllerPool.get(abortKey)) {
+                    appServer.abortControllerPool.abort(abortKey)
+                    logger.info(`[Executions] Aborted running job for execution ${execution.id} (key: ${abortKey})`)
+                }
+            }
+        }
 
         // Delete executions where id is in the provided array and belongs to the workspace
         const result = await executionRepository.delete(whereCondition)
