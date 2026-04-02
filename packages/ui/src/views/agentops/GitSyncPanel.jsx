@@ -13,7 +13,6 @@ import {
     CircularProgress,
     Table,
     TableBody,
-    TableCell,
     TableContainer,
     TableHead,
     TableRow,
@@ -39,6 +38,7 @@ import { useSelector } from 'react-redux'
 import { StyledTableCell, StyledTableRow } from '@/ui-component/table/TableStyles'
 import { StyledButton } from '@/ui-component/button/StyledButton'
 import TablePagination, { DEFAULT_ITEMS_PER_PAGE } from '@/ui-component/pagination/TablePagination'
+import { parseRepoName } from './index'
 
 // API
 import useApi from '@/hooks/useApi'
@@ -63,7 +63,6 @@ import {
     IconDeviceFloppy,
     IconKey,
     IconLock,
-    IconLockOpen,
     IconInfoCircle,
     IconPlugConnected,
     IconTag
@@ -82,6 +81,26 @@ const GitSyncPanel = ({ onStatusChange } = {}) => {
 
     const enqueueSnackbar = (...args) => dispatch(enqueueSnackbarAction(...args))
     const closeSnackbar = (...args) => dispatch(closeSnackbarAction(...args))
+
+    /**
+     * Convenience wrapper — eliminates the repeated key/action boilerplate across
+     * every push/pull/fetch/save handler.
+     */
+    const showSnackbar = (message, variant = 'info', persist = false) => {
+        enqueueSnackbar({
+            message,
+            options: {
+                key: new Date().getTime() + Math.random(),
+                variant,
+                ...(persist ? { persist: true } : {}),
+                action: (key) => (
+                    <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
+                        <IconX />
+                    </Button>
+                )
+            }
+        })
+    }
 
     // API hooks
     const getStatusApi = useApi(gitSyncApi.getStatus)
@@ -136,8 +155,8 @@ const GitSyncPanel = ({ onStatusChange } = {}) => {
         getStatusApi.request()
     }, [])
 
-    const fetchLog = useCallback(() => {
-        setIsLoading(true)
+    const fetchLog = useCallback(({ showSpinner = true } = {}) => {
+        if (showSpinner) setIsLoading(true)
         getLogApi.request({ page: currentPage, pageSize: pageLimit })
     }, [currentPage, pageLimit])
 
@@ -148,35 +167,19 @@ const GitSyncPanel = ({ onStatusChange } = {}) => {
         try {
             const resp = await gitSyncApi.push()
             const data = resp.data?.data
-            enqueueSnackbar({
-                message: `Pushed ${data?.versionsWritten ?? 0} version(s) to git${data?.pushed ? ' remote' : ''}`,
-                options: {
-                    key: new Date().getTime() + Math.random(),
-                    variant: 'success',
-                    action: (key) => (
-                        <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
-                            <IconX />
-                        </Button>
-                    )
-                }
-            })
+            showSnackbar(
+                `Pushed ${data?.versionsWritten ?? 0} version(s) to git${data?.pushed ? ' remote' : ''}`,
+                'success'
+            )
             fetchStatus()
             fetchLog()
             if (onStatusChange) onStatusChange()
         } catch (error) {
-            enqueueSnackbar({
-                message: `Push failed: ${error?.response?.data?.message || error?.message || 'Unknown error'}`,
-                options: {
-                    key: new Date().getTime() + Math.random(),
-                    variant: 'error',
-                    persist: true,
-                    action: (key) => (
-                        <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
-                            <IconX />
-                        </Button>
-                    )
-                }
-            })
+            showSnackbar(
+                `Push failed: ${error?.response?.data?.message || error?.message || 'Unknown error'}`,
+                'error',
+                true
+            )
         } finally {
             setIsPushing(false)
         }
@@ -195,35 +198,16 @@ const GitSyncPanel = ({ onStatusChange } = {}) => {
                 : data?.pulled
                     ? 'Pulled from remote — no new versions to import'
                     : 'Already up to date'
-            enqueueSnackbar({
-                message: msg,
-                options: {
-                    key: new Date().getTime() + Math.random(),
-                    variant: parts.length > 0 ? 'success' : 'info',
-                    action: (key) => (
-                        <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
-                            <IconX />
-                        </Button>
-                    )
-                }
-            })
+            showSnackbar(msg, parts.length > 0 ? 'success' : 'info')
             fetchStatus()
             fetchLog()
             if (onStatusChange) onStatusChange()
         } catch (error) {
-            enqueueSnackbar({
-                message: `Pull failed: ${error?.response?.data?.message || error?.message || 'Unknown error'}`,
-                options: {
-                    key: new Date().getTime() + Math.random(),
-                    variant: 'error',
-                    persist: true,
-                    action: (key) => (
-                        <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
-                            <IconX />
-                        </Button>
-                    )
-                }
-            })
+            showSnackbar(
+                `Pull failed: ${error?.response?.data?.message || error?.message || 'Unknown error'}`,
+                'error',
+                true
+            )
         } finally {
             setIsPulling(false)
         }
@@ -233,34 +217,17 @@ const GitSyncPanel = ({ onStatusChange } = {}) => {
         setIsFetching(true)
         try {
             await gitSyncApi.fetch()
-            enqueueSnackbar({
-                message: 'Fetched latest updates from remote',
-                options: {
-                    key: new Date().getTime() + Math.random(),
-                    variant: 'success',
-                    action: (key) => (
-                        <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
-                            <IconX />
-                        </Button>
-                    )
-                }
-            })
+            showSnackbar('Fetched latest updates from remote', 'success')
             fetchStatus()
+            // Reset to page 1 so the log always shows the newest commits first
+            setCurrentPage(1)
             fetchLog()
         } catch (error) {
-            enqueueSnackbar({
-                message: `Fetch failed: ${error?.response?.data?.message || error?.message || 'Unknown error'}`,
-                options: {
-                    key: new Date().getTime() + Math.random(),
-                    variant: 'error',
-                    persist: true,
-                    action: (key) => (
-                        <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
-                            <IconX />
-                        </Button>
-                    )
-                }
-            })
+            showSnackbar(
+                `Fetch failed: ${error?.response?.data?.message || error?.message || 'Unknown error'}`,
+                'error',
+                true
+            )
         } finally {
             setIsFetching(false)
         }
@@ -275,7 +242,7 @@ const GitSyncPanel = ({ onStatusChange } = {}) => {
     }, [])
 
     useEffect(() => {
-        fetchLog()
+        fetchLog({ showSpinner: false })
     }, [currentPage, pageLimit])
 
     useEffect(() => {
@@ -327,18 +294,10 @@ const GitSyncPanel = ({ onStatusChange } = {}) => {
     const handleSaveConfig = async () => {
         // Guard: test connection must pass before saving when enabling
         if (configForm.enabled && !testConnectionPassed) {
-            enqueueSnackbar({
-                message: 'Please run a successful Test Connection before saving the configuration.',
-                options: {
-                    key: new Date().getTime() + Math.random(),
-                    variant: 'warning',
-                    action: (key) => (
-                        <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
-                            <IconX />
-                        </Button>
-                    )
-                }
-            })
+            showSnackbar(
+                'Please run a successful Test Connection before saving the configuration.',
+                'warning'
+            )
             return
         }
 
@@ -353,18 +312,10 @@ const GitSyncPanel = ({ onStatusChange } = {}) => {
                 setSavedConfig(configForm)
                 setTestConnectionPassed(false)
                 if (onStatusChange) onStatusChange()
-                enqueueSnackbar({
-                    message: 'Git Sync disabled — all configuration and local repository data have been cleared.',
-                    options: {
-                        key: new Date().getTime() + Math.random(),
-                        variant: 'info',
-                        action: (key) => (
-                            <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
-                                <IconX />
-                            </Button>
-                        )
-                    }
-                })
+                showSnackbar(
+                    'Git Sync disabled — all configuration and local repository data have been cleared.',
+                    'info'
+                )
                 return
             }
 
@@ -379,47 +330,20 @@ const GitSyncPanel = ({ onStatusChange } = {}) => {
 
             const saved = resp.data
             if (saved?.initialized === false) {
-                enqueueSnackbar({
-                    message: saved.message || 'Configuration saved, but Git initialisation failed. Check the server logs.',
-                    options: {
-                        key: new Date().getTime() + Math.random(),
-                        variant: 'warning',
-                        persist: true,
-                        action: (key) => (
-                            <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
-                                <IconX />
-                            </Button>
-                        )
-                    }
-                })
+                showSnackbar(
+                    saved.message || 'Configuration saved, but Git initialisation failed. Check the server logs.',
+                    'warning',
+                    true
+                )
             } else {
-                enqueueSnackbar({
-                    message: 'Git Sync configuration saved — use Push to upload to remote',
-                    options: {
-                        key: new Date().getTime() + Math.random(),
-                        variant: 'success',
-                        action: (key) => (
-                            <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
-                                <IconX />
-                            </Button>
-                        )
-                    }
-                })
+                showSnackbar('Git Sync configuration saved — use Push to upload to remote', 'success')
             }
         } catch (error) {
-            enqueueSnackbar({
-                message: `Failed to save config: ${error?.response?.data?.message || error?.message || 'Unknown error'}`,
-                options: {
-                    key: new Date().getTime() + Math.random(),
-                    variant: 'error',
-                    persist: true,
-                    action: (key) => (
-                        <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
-                            <IconX />
-                        </Button>
-                    )
-                }
-            })
+            showSnackbar(
+                `Failed to save config: ${error?.response?.data?.message || error?.message || 'Unknown error'}`,
+                'error',
+                true
+            )
         } finally {
             setIsSavingConfig(false)
         }
@@ -432,49 +356,21 @@ const GitSyncPanel = ({ onStatusChange } = {}) => {
             const data = resp.data
             if (data?.success) {
                 setTestConnectionPassed(true)
-                enqueueSnackbar({
-                    message: 'Connection successful — remote is reachable and credentials are valid',
-                    options: {
-                        key: new Date().getTime() + Math.random(),
-                        variant: 'success',
-                        action: (key) => (
-                            <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
-                                <IconX />
-                            </Button>
-                        )
-                    }
-                })
+                showSnackbar(
+                    'Connection successful — remote is reachable and credentials are valid',
+                    'success'
+                )
             } else {
                 setTestConnectionPassed(false)
-                enqueueSnackbar({
-                    message: `Connection failed: ${data?.error || 'Unknown error'}`,
-                    options: {
-                        key: new Date().getTime() + Math.random(),
-                        variant: 'error',
-                        persist: true,
-                        action: (key) => (
-                            <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
-                                <IconX />
-                            </Button>
-                        )
-                    }
-                })
+                showSnackbar(`Connection failed: ${data?.error || 'Unknown error'}`, 'error', true)
             }
         } catch (error) {
             setTestConnectionPassed(false)
-            enqueueSnackbar({
-                message: `Connection test failed: ${error?.response?.data?.message || error?.message || 'Unknown error'}`,
-                options: {
-                    key: new Date().getTime() + Math.random(),
-                    variant: 'error',
-                    persist: true,
-                    action: (key) => (
-                        <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
-                            <IconX />
-                        </Button>
-                    )
-                }
-            })
+            showSnackbar(
+                `Connection test failed: ${error?.response?.data?.message || error?.message || 'Unknown error'}`,
+                'error',
+                true
+            )
         } finally {
             setIsTesting(false)
         }
@@ -505,6 +401,11 @@ const GitSyncPanel = ({ onStatusChange } = {}) => {
     const renderRefChips = (refs) => {
         if (!refs?.length) return null
 
+        // "origin/HEAD" is a symbolic pointer on the remote side — it adds no
+        // meaningful information for the user and clutters every commit row.
+        const visibleRefs = refs.filter((r) => r !== 'origin/HEAD')
+        if (!visibleRefs.length) return null
+
         const branchColor = customization.isDarkMode ? theme.palette.success.main : theme.palette.success.dark
         const remoteColor = customization.isDarkMode ? theme.palette.success.light : theme.palette.success.dark
         const headBg      = customization.isDarkMode ? theme.palette.warning.main  : theme.palette.warning.dark
@@ -512,7 +413,7 @@ const GitSyncPanel = ({ onStatusChange } = {}) => {
 
         return (
             <Stack direction='row' gap={0.5} flexWrap='wrap'>
-                {refs.map((ref) => {
+                {visibleRefs.map((ref) => {
                     // "HEAD -> main"  → HEAD badge + local branch chip
                     if (ref.startsWith('HEAD -> ')) {
                         const branch = ref.replace('HEAD -> ', '')
@@ -839,20 +740,7 @@ const GitSyncPanel = ({ onStatusChange } = {}) => {
         )
     }
 
-    const repoName = (() => {
-        const url = getStatusApi.data?.remoteUrl
-        if (!url) return null
-        try {
-            const cleaned = url.replace(/\.git$/, '')
-            const httpsMatch = cleaned.match(/https?:\/\/[^/]+\/(.+)/)
-            if (httpsMatch) return httpsMatch[1]
-            const sshMatch = cleaned.match(/[^:]+:(.+)/)
-            if (sshMatch) return sshMatch[1]
-            return cleaned
-        } catch {
-            return url
-        }
-    })()
+    const repoName = parseRepoName(getStatusApi.data?.remoteUrl)
 
     return (
         <Stack flexDirection='column' sx={{ gap: 3 }}>

@@ -11,6 +11,7 @@ export interface CreateVersionDTO {
     flowData?: string // Optional - if not provided, will fetch from chatflow
     changeDescription?: string
     createdBy?: string
+    workspaceId?: string
 }
 
 /**
@@ -47,6 +48,7 @@ const createVersion = async (data: CreateVersionDTO): Promise<ChatFlowVersion> =
             flowData: flowData,
             changeDescription: data.changeDescription,
             createdBy: data.createdBy,
+            workspaceId: data.workspaceId || chatflow.workspaceId,
             chatFlowName: chatflow.name,
             chatFlowType: chatflow.type,
             chatbotConfig: chatflow.chatbotConfig,
@@ -59,7 +61,7 @@ const createVersion = async (data: CreateVersionDTO): Promise<ChatFlowVersion> =
         })
 
         const savedVersion = await versionRepo.save(newVersion)
-        logger.info(`[ChatFlowVersion] Created version ${nextVersion} for chatflow ${data.chatFlowId}`)
+        logger.debug(`[ChatFlowVersion] Created version ${nextVersion} for chatflow ${data.chatFlowId}`)
 
         return savedVersion
     } catch (error) {
@@ -230,7 +232,7 @@ const restoreVersion = async (versionId: string, userId?: string, workspaceId?: 
             await versionRepo
                 .createQueryBuilder()
                 .update(ChatFlowVersion)
-                .set({ chatFlowId: version.chatFlowId })
+                .set({ chatFlowId: version.chatFlowId, workspaceId: targetWorkspaceId })
                 .where('chatFlowName = :name AND chatFlowId IS NULL', { name: flowName })
                 .execute()
 
@@ -266,7 +268,7 @@ const updateVersion = async (versionId: string, data: { changeDescription?: stri
         version.changeDescription = data.changeDescription || ''
         const updatedVersion = await versionRepo.save(version)
         
-        logger.info(`[ChatFlowVersion] Updated version ${version.version} for chatflow ${version.chatFlowId}`)
+        logger.debug(`[ChatFlowVersion] Updated version ${version.version} for chatflow ${version.chatFlowId}`)
         
         return updatedVersion
     } catch (error) {
@@ -292,7 +294,7 @@ const deleteVersion = async (versionId: string): Promise<void> => {
         }
 
         await versionRepo.remove(version)
-        logger.info(`[ChatFlowVersion] Deleted version ${version.version} for chatflow ${version.chatFlowId}`)
+        logger.debug(`[ChatFlowVersion] Deleted version ${version.version} for chatflow ${version.chatFlowId}`)
     } catch (error) {
         throw new InternalFlowiseError(
             StatusCodes.INTERNAL_SERVER_ERROR,
@@ -320,7 +322,7 @@ const getAllVersions = async (
             .orderBy('version.createdDate', 'DESC')
 
         if (workspaceId) {
-            queryBuilder.andWhere('chatFlow.workspaceId = :workspaceId', { workspaceId })
+            queryBuilder.andWhere('version.workspaceId = :workspaceId', { workspaceId })
         }
 
         if (chatflowType) {
@@ -457,6 +459,11 @@ const getAllVersionsGrouped = async (
         } else {
             // No active flows at all — all versions are orphaned
             orphanQueryBuilder.where('1=1')
+        }
+
+        // Scope orphaned versions to the current workspace
+        if (workspaceId) {
+            orphanQueryBuilder.andWhere('version.workspaceId = :workspaceId', { workspaceId })
         }
 
         if (chatflowType) {

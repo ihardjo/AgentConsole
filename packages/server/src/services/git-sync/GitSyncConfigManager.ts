@@ -5,7 +5,10 @@
  * Sensitive fields (accessToken, sshKeyPath) are AES-encrypted using the same
  * encryption key as the rest of the Flowise credential store.
  *
- * File location: <storagePath>/git-sync-config.json
+ * File location: <storagePath>/git-sync-<workspaceId>.json
+ *
+ * Each workspace gets its own config file so that different workspaces can
+ * have independent remote URLs, branches, and credentials.
  */
 
 import fs from 'node:fs'
@@ -16,8 +19,6 @@ import { getEncryptionKey } from '../../utils'
 import logger from '../../utils/logger'
 
 import type { GitSyncConfig } from './GitSyncService'
-
-const CONFIG_FILENAME = 'git-sync-config.json'
 
 /** Fields that must be encrypted at rest. */
 const SENSITIVE_FIELDS: (keyof GitSyncConfig)[] = ['accessToken', 'sshKeyPath']
@@ -31,19 +32,13 @@ interface PersistedConfig {
 }
 
 class GitSyncConfigManager {
-    private static instance: GitSyncConfigManager
     private configFilePath: string
+    private readonly workspaceId: string
 
-    private constructor() {
+    constructor(workspaceId: string) {
+        this.workspaceId = workspaceId
         const storagePath = getStoragePath()
-        this.configFilePath = path.join(storagePath, CONFIG_FILENAME)
-    }
-
-    static getInstance(): GitSyncConfigManager {
-        if (!GitSyncConfigManager.instance) {
-            GitSyncConfigManager.instance = new GitSyncConfigManager()
-        }
-        return GitSyncConfigManager.instance
+        this.configFilePath = path.join(storagePath, `git-sync-${workspaceId}.json`)
     }
 
     // ── Read ───────────────────────────────────────────────────────────
@@ -73,7 +68,7 @@ class GitSyncConfigManager {
                         raw[field] = decrypted
                     } catch {
                         // If decryption fails (e.g. key changed), clear the field
-                        logger.warn(`[GitSyncConfig] Failed to decrypt field '${field}', clearing it`)
+                        logger.warn(`[GitSyncConfig:${this.workspaceId}] Failed to decrypt field '${field}', clearing it`)
                         raw[field] = ''
                     }
                 }
@@ -81,7 +76,7 @@ class GitSyncConfigManager {
 
             return raw as unknown as GitSyncConfig
         } catch (error) {
-            logger.error(`[GitSyncConfig] Failed to load config: ${error}`)
+            logger.error(`[GitSyncConfig:${this.workspaceId}] Failed to load config: ${error}`)
             return null
         }
     }
@@ -118,9 +113,9 @@ class GitSyncConfigManager {
                 JSON.stringify(persisted, null, 2),
                 'utf-8'
             )
-            logger.info('[GitSyncConfig] Configuration saved to disk')
+            logger.debug(`[GitSyncConfig:${this.workspaceId}] Configuration saved to disk`)
         } catch (error) {
-            logger.error(`[GitSyncConfig] Failed to save config: ${error}`)
+            logger.error(`[GitSyncConfig:${this.workspaceId}] Failed to save config: ${error}`)
         }
     }
 
@@ -132,10 +127,10 @@ class GitSyncConfigManager {
         try {
             if (fs.existsSync(this.configFilePath)) {
                 fs.unlinkSync(this.configFilePath)
-                logger.info('[GitSyncConfig] Configuration file deleted from disk')
+                logger.debug(`[GitSyncConfig:${this.workspaceId}] Configuration file deleted from disk`)
             }
         } catch (error) {
-            logger.error(`[GitSyncConfig] Failed to delete config file: ${error}`)
+            logger.error(`[GitSyncConfig:${this.workspaceId}] Failed to delete config file: ${error}`)
         }
     }
 
@@ -154,4 +149,42 @@ class GitSyncConfigManager {
     }
 }
 
-export default GitSyncConfigManager.getInstance()
+// ── Per-workspace factory ─────────────────────────────────────────────────────
+
+const configManagerCache = new Map<string, GitSyncConfigManager>()
+
+/**
+ * Return (or create) the GitSyncConfigManager for the given workspace.
+ * Instances are cached so a single file-handle is reused per workspace.
+ */
+export function getWorkspaceConfigManager(workspaceId: string): GitSyncConfigManager {
+    let mgr = configManagerCache.get(workspaceId)
+    if (!mgr) {
+        mgr = new GitSyncConfigManager(workspaceId)
+        configManagerCache.set(workspaceId, mgr)
+    }
+    return mgr
+}
+
+/**
+ * Return the workspace IDs of all persisted workspace config files.
+ * Used at startup to discover which workspaces have Git Sync configured.
+ *
+ * Only returns IDs that look like valid UUIDs — this filters out legacy
+ * config files (e.g. `git-sync-config.json` from before workspace isolation).
+ */
+export function listWorkspaceConfigIds(): string[] {
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    try {
+        const storagePath = getStoragePath()
+        const files = fs.readdirSync(storagePath)
+        return files
+            .filter((f) => f.startsWith('git-sync-') && f.endsWith('.json'))
+            .map((f) => f.replace('git-sync-', '').replace('.json', ''))
+            .filter((id) => UUID_RE.test(id))
+    } catch {
+        return []
+    }
+}
+
+export default getWorkspaceConfigManager

@@ -16,6 +16,12 @@ export class ChatFlowVersion {
     @JoinColumn({ name: 'chatFlowId' })
     chatFlow: ChatFlow
 
+    /** Workspace that owns this version — denormalized from ChatFlow so
+     *  queries can filter by workspace without joining. */
+    @Column({ nullable: true, type: 'text' })
+    @Index()
+    workspaceId?: string
+
     @Column()
     version: number
 

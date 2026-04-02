@@ -4,6 +4,7 @@ import { AddChatFlowVersionEntity1760000000003 } from './1760000000003-AddChatFl
 import { MakeVersionStandalone1760000000004 } from './1760000000004-MakeVersionStandalone'
 import { RemoveVersionForeignKey1760000000005 } from './1760000000005-RemoveVersionForeignKey'
 import { AddVersionConfigColumns1760000000006 } from './1760000000006-AddVersionConfigColumns'
+import { AddWorkspaceIdToVersion1760000000007 } from './1760000000007-AddWorkspaceIdToVersion'
 
 export const sqliteCustomMigrations = [
     AddPlatformAssetEntity1760000000001,
@@ -11,5 +12,6 @@ export const sqliteCustomMigrations = [
     AddChatFlowVersionEntity1760000000003,
     MakeVersionStandalone1760000000004,
     RemoveVersionForeignKey1760000000005,
-    AddVersionConfigColumns1760000000006
+    AddVersionConfigColumns1760000000006,
+    AddWorkspaceIdToVersion1760000000007
 ]
