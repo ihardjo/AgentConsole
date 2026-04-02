@@ -30,7 +30,7 @@ import { PermissionIconButton, StyledPermissionButton } from '@/ui-component/but
 import ConfirmDialog from '@/ui-component/dialog/ConfirmDialog'
 import ViewHeader from '@/layout/MainLayout/ViewHeader'
 import ErrorBoundary from '@/ErrorBoundary'
-import CreateEditRoleDialog from '@/views/rolemanagement/CreateEditRoleDialog'
+import CreateEditRoleDialog from './CreateEditRoleDialog'
 
 // API
 import authApi from '@/api/auth'
