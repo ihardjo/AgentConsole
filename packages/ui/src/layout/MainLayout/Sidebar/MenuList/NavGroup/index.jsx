@@ -57,7 +57,7 @@ const NavGroup = ({ item }) => {
 
     const renderPrimaryItems = () => {
         const primaryGroup = item.children.find((child) => child.id === 'primary')
-        return primaryGroup.children
+        return primaryGroup?.children ?? []
     }
 
     const renderNonPrimaryGroups = () => {
@@ -86,31 +86,33 @@ const NavGroup = ({ item }) => {
 
     return (
         <>
-            <List
-                subheader={
-                    item.title && (
-                        <Typography variant='caption' sx={{ ...theme.typography.menuCaption }} display='block' gutterBottom>
-                            {item.title}
-                            {item.caption && (
-                                <Typography variant='caption' sx={{ ...theme.typography.subMenuCaption }} display='block' gutterBottom>
-                                    {item.caption}
-                                </Typography>
-                            )}
-                        </Typography>
-                    )
-                }
-                sx={{ p: '16px', py: 2, display: 'flex', flexDirection: 'column', gap: 1 }}
-            >
-                {renderPrimaryItems().map((menu) => listItems(menu))}
-            </List>
+            {renderPrimaryItems().length > 0 && (
+                <List
+                    subheader={
+                        item.title && (
+                            <Typography variant='caption' sx={{ ...theme.typography.menuCaption }} display='block' gutterBottom>
+                                {item.title}
+                                {item.caption && (
+                                    <Typography variant='caption' sx={{ ...theme.typography.subMenuCaption }} display='block' gutterBottom>
+                                        {item.caption}
+                                    </Typography>
+                                )}
+                            </Typography>
+                        )
+                    }
+                    sx={{ p: '16px', py: 2, display: 'flex', flexDirection: 'column', gap: 1 }}
+                >
+                    {renderPrimaryItems().map((menu) => listItems(menu))}
+                </List>
+            )}
 
-            {renderNonPrimaryGroups().map((group) => {
+            {renderNonPrimaryGroups().map((group, index) => {
                 // Check if group should be shown (either has alwaysShow items or user has permissions)
                 if (!shouldShowGroup(group)) return null
 
                 return (
                     <div key={group.id}>
-                        <Divider sx={{ height: '1px', borderColor: theme.palette.grey[900] + 25, my: 0 }} />
+                        {index > 0 && <Divider sx={{ height: '1px', borderColor: theme.palette.grey[900] + 25, my: 0 }} />}
                         <List
                             subheader={
                                 <Typography variant='caption' sx={{ ...theme.typography.subMenuCaption }} display='block' gutterBottom>

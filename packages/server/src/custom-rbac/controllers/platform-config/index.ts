@@ -329,6 +329,10 @@ export const serveAssetFile = async (req: Request, res: Response, next: NextFunc
         
         res.setHeader('Content-Type', file.mimeType)
         res.setHeader('Content-Disposition', `inline; filename="${file.fileName}"`)
+        // Disable caching to ensure asset previews update immediately after re-upload
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+        res.setHeader('Pragma', 'no-cache')
+        res.setHeader('Expires', '0')
         res.send(file.buffer)
     } catch (error) {
         next(error)

@@ -11,7 +11,7 @@ export const ConfigProvider = ({ children }) => {
     const [isEnterpriseLicensed, setEnterpriseLicensed] = useState(false)
     const [isCloud, setCloudLicensed] = useState(false)
     const [isOpenSource, setOpenSource] = useState(false)
-    const [appName, setAppName] = useState('Agent Console')
+    const [appName, setAppName] = useState('AI Reinvention Studio')
 
     // Function to update document title
     const updateDocumentTitle = (name) => {

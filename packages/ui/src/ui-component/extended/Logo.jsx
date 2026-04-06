@@ -66,7 +66,7 @@ const Logo = () => {
             <img
                 style={{ objectFit: 'contain', height: 'auto', width: 150 }}
                 src={logoSrc}
-                alt='Flowise'
+                alt='AI Reinvention Studio'
             />
         </div>
     )

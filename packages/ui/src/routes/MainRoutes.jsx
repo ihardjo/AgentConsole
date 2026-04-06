@@ -71,8 +71,7 @@ const SSOConfig = Loadable(lazy(() => import('@/views/auth/ssoConfig')))
 const SSOSuccess = Loadable(lazy(() => import('@/views/auth/ssoSuccess')))
 
 // custom RBAC features
-const RoleManagement = Loadable(lazy(() => import('@/views/rolemanagement')))
-const UserManagement = Loadable(lazy(() => import('@/views/usermanagement')))
+const UserRoleManagement = Loadable(lazy(() => import('@/views/user-role-management')))
 const WorkspaceManagement = Loadable(lazy(() => import('@/views/workspacemanagement')))
 const WorkspaceUserManagement = Loadable(lazy(() => import('@/views/workspacemanagement/WorkspaceUserManagement')))
 const PlatformConfiguration = Loadable(lazy(() => import('@/views/platformconfiguration')))
@@ -80,6 +79,9 @@ const PlatformConfiguration = Loadable(lazy(() => import('@/views/platformconfig
 // deployment management
 const AgentOps = Loadable(lazy(() => import('@/views/agentops')))
 const WorkerConfiguration = Loadable(lazy(() => import('@/views/workerconfiguration')))
+
+// coming soon placeholder
+const ComingSoon = Loadable(lazy(() => import('@/views/coming-soon')))
 
 // ==============================|| MAIN ROUTING ||============================== //
 
@@ -357,18 +359,10 @@ const MainRoutes = {
         },
         // Custom RBAC Routes
         {
-            path: '/role-management',
+            path: '/user-role-management',
             element: (
-                <RequireAuth permission={'roles:manage'}>
-                    <RoleManagement />
-                </RequireAuth>
-            )
-        },
-        {
-            path: '/user-management',
-            element: (
-                <RequireAuth permission={'users:manage'}>
-                    <UserManagement />
+                <RequireAuth permission={'users:manage,roles:manage'}>
+                    <UserRoleManagement />
                 </RequireAuth>
             )
         },
@@ -410,6 +404,14 @@ const MainRoutes = {
             element: (
                 <RequireAuth permission={'worker:view'}>
                     <WorkerConfiguration />
+                </RequireAuth>
+            )
+        },
+        {
+            path: '/coming-soon',
+            element: (
+                <RequireAuth>
+                    <ComingSoon />
                 </RequireAuth>
             )
         }

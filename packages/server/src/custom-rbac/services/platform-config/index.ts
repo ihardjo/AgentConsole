@@ -24,7 +24,7 @@ import fs from 'fs'
 
 // Constants
 const PLATFORM_ASSETS_FOLDER = 'platform-assets'
-const DEFAULT_APPLICATION_NAME = 'Agent Console'
+const DEFAULT_APPLICATION_NAME = 'AI Reinvention Studio'
 
 // Allowed MIME types for each asset type
 const ALLOWED_MIME_TYPES: Record<PlatformAssetType, string[]> = {

@@ -1,7 +1,7 @@
-import dashboard from './dashboard'
+import reinventionDashboard from './reinventionDashboard'
 
 // ==============================|| MENU ITEMS ||============================== //
 
 export const menuItems = {
-    items: [dashboard]
+    items: [reinventionDashboard]
 }
