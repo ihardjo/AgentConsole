@@ -692,7 +692,19 @@ const previewChunksMiddleware = async (
             subscriptionId
         }
 
-        if (process.env.MODE === MODE.QUEUE) {
+        if (process.env.MODE === MODE.QUEUE_DEDICATED_WORKSPACE && workspaceId) {
+            const upsertQueue = appServer.queueManager.getOrCreateWorkspaceQueue('upsert', workspaceId)
+            const job = await upsertQueue.addJob(omit(executeData, OMIT_QUEUE_JOB_DATA))
+            logger.debug(`[server]: [${orgId}]: Job added to workspace queue: ${job.id}`)
+
+            const queueEvents = upsertQueue.getQueueEvents()
+            const result = await job.waitUntilFinished(queueEvents)
+
+            if (!result) {
+                throw new Error('Job execution failed')
+            }
+            return result
+        } else if (process.env.MODE === MODE.QUEUE) {
             const upsertQueue = appServer.queueManager.getQueue('upsert')
             const job = await upsertQueue.addJob(omit(executeData, OMIT_QUEUE_JOB_DATA))
             logger.debug(`[server]: [${orgId}]: Job added to queue: ${job.id}`)
@@ -894,7 +906,25 @@ const processLoaderMiddleware = async (
             usageCacheManager
         }
 
-        if (process.env.MODE === MODE.QUEUE) {
+        if (process.env.MODE === MODE.QUEUE_DEDICATED_WORKSPACE && workspaceId) {
+            const upsertQueue = appServer.queueManager.getOrCreateWorkspaceQueue('upsert', workspaceId)
+            const job = await upsertQueue.addJob(omit(executeData, OMIT_QUEUE_JOB_DATA))
+            logger.debug(`[server]: [${orgId}]: Job added to workspace queue: ${job.id}`)
+
+            if (isInternalRequest) {
+                return {
+                    jobId: job.id
+                }
+            }
+
+            const queueEvents = upsertQueue.getQueueEvents()
+            const result = await job.waitUntilFinished(queueEvents)
+
+            if (!result) {
+                throw new Error('Job execution failed')
+            }
+            return result
+        } else if (process.env.MODE === MODE.QUEUE) {
             const upsertQueue = appServer.queueManager.getQueue('upsert')
             const job = await upsertQueue.addJob(omit(executeData, OMIT_QUEUE_JOB_DATA))
             logger.debug(`[server]: [${orgId}]: Job added to queue: ${job.id}`)
@@ -1313,7 +1343,19 @@ const insertIntoVectorStoreMiddleware = async (
             usageCacheManager
         }
 
-        if (process.env.MODE === MODE.QUEUE) {
+        if (process.env.MODE === MODE.QUEUE_DEDICATED_WORKSPACE && workspaceId) {
+            const upsertQueue = appServer.queueManager.getOrCreateWorkspaceQueue('upsert', workspaceId)
+            const job = await upsertQueue.addJob(omit(executeData, OMIT_QUEUE_JOB_DATA))
+            logger.debug(`[server]: [${orgId}]: Job added to workspace queue: ${job.id}`)
+
+            const queueEvents = upsertQueue.getQueueEvents()
+            const result = await job.waitUntilFinished(queueEvents)
+
+            if (!result) {
+                throw new Error('Job execution failed')
+            }
+            return result
+        } else if (process.env.MODE === MODE.QUEUE) {
             const upsertQueue = appServer.queueManager.getQueue('upsert')
             const job = await upsertQueue.addJob(omit(executeData, OMIT_QUEUE_JOB_DATA))
             logger.debug(`[server]: [${orgId}]: Job added to queue: ${job.id}`)
@@ -2043,7 +2085,19 @@ const upsertDocStoreMiddleware = async (
             usageCacheManager
         }
 
-        if (process.env.MODE === MODE.QUEUE) {
+        if (process.env.MODE === MODE.QUEUE_DEDICATED_WORKSPACE && workspaceId) {
+            const upsertQueue = appServer.queueManager.getOrCreateWorkspaceQueue('upsert', workspaceId)
+            const job = await upsertQueue.addJob(omit(executeData, OMIT_QUEUE_JOB_DATA))
+            logger.debug(`[server]: [${orgId}]: Job added to workspace queue: ${job.id}`)
+
+            const queueEvents = upsertQueue.getQueueEvents()
+            const result = await job.waitUntilFinished(queueEvents)
+
+            if (!result) {
+                throw new Error('Job execution failed')
+            }
+            return result
+        } else if (process.env.MODE === MODE.QUEUE) {
             const upsertQueue = appServer.queueManager.getQueue('upsert')
             const job = await upsertQueue.addJob(omit(executeData, OMIT_QUEUE_JOB_DATA))
             logger.debug(`[server]: [${orgId}]: Job added to queue: ${job.id}`)
@@ -2118,7 +2172,19 @@ const refreshDocStoreMiddleware = async (
             usageCacheManager
         }
 
-        if (process.env.MODE === MODE.QUEUE) {
+        if (process.env.MODE === MODE.QUEUE_DEDICATED_WORKSPACE && workspaceId) {
+            const upsertQueue = appServer.queueManager.getOrCreateWorkspaceQueue('upsert', workspaceId)
+            const job = await upsertQueue.addJob(omit(executeData, OMIT_QUEUE_JOB_DATA))
+            logger.debug(`[server]: [${orgId}]: Job added to workspace queue: ${job.id}`)
+
+            const queueEvents = upsertQueue.getQueueEvents()
+            const result = await job.waitUntilFinished(queueEvents)
+
+            if (!result) {
+                throw new Error('Job execution failed')
+            }
+            return result
+        } else if (process.env.MODE === MODE.QUEUE) {
             const upsertQueue = appServer.queueManager.getQueue('upsert')
             const job = await upsertQueue.addJob(omit(executeData, OMIT_QUEUE_JOB_DATA))
             logger.debug(`[server]: [${orgId}]: Job added to queue: ${job.id}`)

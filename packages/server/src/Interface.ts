@@ -24,6 +24,7 @@ export type ExecutionState = 'INPROGRESS' | 'FINISHED' | 'ERROR' | 'TERMINATED' 
 
 export enum MODE {
     QUEUE = 'queue',
+    QUEUE_DEDICATED_WORKSPACE = 'queue-dedicated-workspace',
     MAIN = 'main'
 }
 

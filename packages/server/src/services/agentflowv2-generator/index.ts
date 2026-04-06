@@ -199,7 +199,20 @@ const generateAgentflowv2 = async (question: string, selectedChatModel: Record<s
 
         let response
 
-        if (process.env.MODE === MODE.QUEUE) {
+        if (process.env.MODE === MODE.QUEUE_DEDICATED_WORKSPACE) {
+            // agentflow generation is not workspace-specific; fall through to the shared queue if available
+            const predictionQueue = getRunningExpressApp().queueManager.getQueue('prediction')
+            const job = await predictionQueue.addJob({
+                prompt,
+                question,
+                toolNodes,
+                selectedChatModel,
+                isAgentFlowGenerator: true
+            })
+            logger.debug(`[server]: Generated Agentflowv2 Job added to workspace queue: ${job.id}`)
+            const queueEvents = predictionQueue.getQueueEvents()
+            response = await job.waitUntilFinished(queueEvents)
+        } else if (process.env.MODE === MODE.QUEUE) {
             const predictionQueue = getRunningExpressApp().queueManager.getQueue('prediction')
             const job = await predictionQueue.addJob({
                 prompt,

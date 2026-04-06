@@ -134,7 +134,20 @@ const executeCustomFunction = async (requestBody: any, workspaceId?: string, org
         workspaceId
     }
 
-    if (process.env.MODE === MODE.QUEUE) {
+    if (process.env.MODE === MODE.QUEUE_DEDICATED_WORKSPACE && workspaceId) {
+        const predictionQueue = appServer.queueManager.getOrCreateWorkspaceQueue('prediction', workspaceId)
+
+        const job = await predictionQueue.addJob(omit(executeData, OMIT_QUEUE_JOB_DATA))
+        logger.debug(`[server]: Execute Custom Function Job added to workspace queue by ${orgId}: ${job.id}`)
+
+        const queueEvents = predictionQueue.getQueueEvents()
+        const result = await job.waitUntilFinished(queueEvents)
+        if (!result) {
+            throw new Error('Failed to execute custom function')
+        }
+
+        return result
+    } else if (process.env.MODE === MODE.QUEUE) {
         const predictionQueue = appServer.queueManager.getQueue('prediction')
 
         const job = await predictionQueue.addJob(omit(executeData, OMIT_QUEUE_JOB_DATA))

@@ -146,6 +146,23 @@ export class App {
                 this.redisSubscriber = new RedisEventSubscriber(this.sseStreamer)
                 await this.redisSubscriber.connect()
                 logger.info('🔗 [server]: Redis event subscriber connected successfully')
+            } else if (process.env.MODE === MODE.QUEUE_DEDICATED_WORKSPACE) {
+                // In dedicated-workspace mode the main server acts as a producer only —
+                // it lazily creates workspace-scoped queues on demand via getOrCreateWorkspaceQueue.
+                // No legacy shared queues or workers are set up here.
+                // RedisEventSubscriber IS required: workers publish SSE streaming events to Redis
+                // pub/sub channels and the main server must forward them to the browser.
+                // BullBoard IS set up so /admin/queues is accessible (will show workspace queues
+                // as they are lazily registered via getOrCreateWorkspaceQueue).
+                this.queueManager = QueueManager.getInstance()
+                const dedicatedServerAdapter = new ExpressAdapter()
+                dedicatedServerAdapter.setBasePath('/admin/queues')
+                this.queueManager.initBullBoard(dedicatedServerAdapter)
+                logger.info('✅ [Queue]: QueueManager initialised in producer-only mode (queue-dedicated-workspace)')
+
+                this.redisSubscriber = new RedisEventSubscriber(this.sseStreamer)
+                await this.redisSubscriber.connect()
+                logger.info('🔗 [server]: Redis event subscriber connected successfully')
             }
 
             // TODO: Remove this by end of 2025
@@ -337,7 +354,11 @@ export class App {
             })
         })
 
-        if (process.env.MODE === MODE.QUEUE && process.env.ENABLE_BULLMQ_DASHBOARD === 'true' && !this.identityManager.isCloud()) {
+        if (
+            (process.env.MODE === MODE.QUEUE || process.env.MODE === MODE.QUEUE_DEDICATED_WORKSPACE) &&
+            process.env.ENABLE_BULLMQ_DASHBOARD === 'true' &&
+            !this.identityManager.isCloud()
+        ) {
             // Initialize admin queues rate limiter
             const id = 'bullmq_admin_dashboard'
             await this.rateLimiterManager.addRateLimiter(

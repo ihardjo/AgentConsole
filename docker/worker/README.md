@@ -26,3 +26,37 @@ Here’s an overview of the process:
 ## Entrypoint:
 
 Different from main server image which is using `flowise start`, entrypoint for worker is `pnpm run start-worker`. This is because the worker's [Dockerfile](./Dockerfile) build the image from source files via `pnpm build` instead of npm registry via `RUN npm install -g flowise`.
+
+---
+
+## Workspace-Dedicated Mode
+
+In addition to the default shared-queue mode (`MODE=queue`), Flowise supports a **workspace-dedicated** mode where each worker process handles **only one workspace's queues**.
+
+### When to use
+
+Use `MODE=queue-dedicated-workspace` when you need strict tenant isolation at the queue level — for example, to prevent one busy workspace from starving another, or to meet compliance requirements that prohibit cross-tenant job routing.
+
+### How it works
+
+1. Set `MODE=queue-dedicated-workspace` and `WORKER_WORKSPACE_ID=<your-workspace-id>` in the worker's `.env`.
+2. The worker creates two workspace-scoped queues:
+   - `<QUEUE_NAME>-prediction-<workspaceId>`
+   - `<QUEUE_NAME>-upsertion-<workspaceId>`
+3. The main server routes jobs from that workspace to the matching workspace-scoped queues (instead of the shared global queue).
+4. No other workspace's jobs will be processed by this worker.
+
+### Environment variables
+
+| Variable | Description |
+|---|---|
+| `MODE` | Set to `queue-dedicated-workspace` |
+| `WORKER_WORKSPACE_ID` | The ID of the workspace this worker is exclusively dedicated to |
+| `QUEUE_NAME` | Queue name prefix — must match the main server's `QUEUE_NAME` |
+
+> **Fallback behaviour:** If `MODE=queue-dedicated-workspace` is set but `WORKER_WORKSPACE_ID` is missing, the worker will log a warning and fall back to the legacy shared-queue mode.
+
+### Worker auto-exit on workspace deletion
+
+When a workspace is deleted, the main server calls `teardownWorkspaceQueue` which obliterates the workspace's queues from Redis. BullMQ's `Worker` emits a `closing` event when its queue is obliterated. The worker process listens for this event and calls `stopProcess()` automatically — cleanly shutting down without manual intervention.
+

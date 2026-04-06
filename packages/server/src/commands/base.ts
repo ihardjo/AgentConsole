@@ -78,13 +78,14 @@ export abstract class BaseCommand extends Command {
         SECRETKEY_AWS_REGION: Flags.string(),
         SECRETKEY_AWS_NAME: Flags.string(),
 
-        // Queue
+        // Queue — MODE values: queue | queue-dedicated-workspace | main
         MODE: Flags.string(),
         WORKER_CONCURRENCY: Flags.string(),
         QUEUE_NAME: Flags.string(),
         QUEUE_REDIS_EVENT_STREAM_MAX_LEN: Flags.string(),
         REMOVE_ON_AGE: Flags.string(),
         REMOVE_ON_COUNT: Flags.string(),
+        WORKER_WORKSPACE_ID: Flags.string(),
         REDIS_URL: Flags.string(),
         REDIS_HOST: Flags.string(),
         REDIS_PORT: Flags.string(),

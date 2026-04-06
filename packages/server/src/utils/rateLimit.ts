@@ -22,7 +22,7 @@ export class RateLimiterManager {
     private queueEvents: QueueEvents
 
     constructor() {
-        if (process.env.MODE === MODE.QUEUE) {
+        if (process.env.MODE === MODE.QUEUE || process.env.MODE === MODE.QUEUE_DEDICATED_WORKSPACE) {
             if (process.env.REDIS_URL) {
                 this.redisClient = new Redis(process.env.REDIS_URL, {
                     keepAlive:
@@ -94,7 +94,7 @@ export class RateLimiterManager {
     public async addRateLimiter(id: string, duration: number, limit: number, message: string): Promise<void> {
         const release = await this.rateLimiterMutex.acquire()
         try {
-            if (process.env.MODE === MODE.QUEUE) {
+            if (process.env.MODE === MODE.QUEUE || process.env.MODE === MODE.QUEUE_DEDICATED_WORKSPACE) {
                 this.rateLimiters[id] = rateLimit({
                     windowMs: duration * 1000,
                     max: limit,
@@ -151,7 +151,7 @@ export class RateLimiterManager {
 
         const { limitDuration, limitMax, limitMsg, status } = rateLimit
 
-        if (!isInitialized && process.env.MODE === MODE.QUEUE && this.queueEventsProducer) {
+        if (!isInitialized && (process.env.MODE === MODE.QUEUE || process.env.MODE === MODE.QUEUE_DEDICATED_WORKSPACE) && this.queueEventsProducer) {
             await this.queueEventsProducer.publishEvent({
                 eventName: QUEUE_EVENT_NAME,
                 limitDuration,
@@ -175,7 +175,7 @@ export class RateLimiterManager {
             })
         )
 
-        if (process.env.MODE === MODE.QUEUE && this.queueEvents) {
+        if ((process.env.MODE === MODE.QUEUE || process.env.MODE === MODE.QUEUE_DEDICATED_WORKSPACE) && this.queueEvents) {
             this.queueEvents.on<CustomListener>(
                 QUEUE_EVENT_NAME,
                 async ({

@@ -30,6 +30,9 @@ import { GeneralRole } from '../../entities/role.entity'
 import { User } from '../../entities/user.entity'
 import { Organization } from '../../entities/organization.entity'
 import { isInvalidName, isInvalidUUID } from '../../utils/validation.util'
+import { QueueManager } from '../../../queue/QueueManager'
+import { MODE } from '../../../Interface'
+import logger from '../../../utils/logger'
 
 // Import non-enterprise database entities for workspace deletion
 import { ChatFlow } from '../../../database/entities/ChatFlow'
@@ -303,12 +306,24 @@ export class WorkspaceManagementService {
             await queryRunner.release()
         }
 
+        // Fire-and-forget queue teardown after the DB transaction is committed.
+        // Only active in MODE=queue-dedicated-workspace.
+        if (process.env.MODE === MODE.QUEUE_DEDICATED_WORKSPACE && id) {
+            QueueManager.getInstance()
+                .teardownWorkspaceQueue(id)
+                .catch((err) => logger.warn(`[WorkspaceManagement] Failed to tear down queues for workspace ${id}: ${err}`))
+        }
+
         return { message: GeneralSuccessMessage.DELETED }
     }
 
     /**
-     * Delete workspace by ID using an existing queryRunner (for transactional operations)
-     * This method is used when deleting a workspace as part of a larger transaction (e.g., deleting user from organization)
+     * Delete workspace by ID using an existing queryRunner (for transactional operations).
+     * This method is used when deleting a workspace as part of a larger transaction (e.g., deleting user from organization).
+     *
+     * **Queue teardown note:** This method runs inside the caller's outer transaction and does NOT trigger
+     * queue teardown itself. When `MODE=queue-dedicated-workspace`, the caller is responsible for invoking
+     * `QueueManager.getInstance().teardownWorkspaceQueue(workspaceId)` after their outer transaction commits.
      */
     public async deleteWorkspaceById(queryRunner: QueryRunner, workspaceId: string) {
         const workspace = await this.readWorkspaceById(workspaceId, queryRunner)

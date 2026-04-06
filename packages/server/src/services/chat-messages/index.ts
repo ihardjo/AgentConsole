@@ -187,12 +187,17 @@ const removeChatMessagesByMessageIds = async (
     }
 }
 
-const abortChatMessage = async (chatId: string, chatflowid: string) => {
+const abortChatMessage = async (chatId: string, chatflowid: string, workspaceId?: string) => {
     try {
         const appServer = getRunningExpressApp()
         const id = `${chatflowid}_${chatId}`
 
-        if (process.env.MODE === MODE.QUEUE) {
+        if (process.env.MODE === MODE.QUEUE_DEDICATED_WORKSPACE && workspaceId) {
+            await appServer.queueManager.getWorkspaceQueueEventsProducer(workspaceId).publishEvent({
+                eventName: 'abort',
+                id
+            })
+        } else if (process.env.MODE === MODE.QUEUE) {
             await appServer.queueManager.getPredictionQueueEventsProducer().publishEvent({
                 eventName: 'abort',
                 id
