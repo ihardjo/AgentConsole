@@ -15,6 +15,21 @@ The sidebar navigation SHALL be organised into exactly 6 named domain groups ren
 - **WHEN** a user does not have permission for a menu item within a group
 - **THEN** that item SHALL be hidden, but the group header SHALL remain visible if at least one item in the group is visible
 
+### Requirement: PROCESS STUDIO group
+The PROCESS STUDIO group SHALL contain four menu items in order: "Chatflows", "Reinvention Processes", "Deployments", and "Process Intelligence". "Process Intelligence" SHALL link to `/coming-soon` with `alwaysShow: true` and use icon `IconBulb`. It SHALL be rendered immediately after "Deployments".
+
+#### Scenario: Process Intelligence is present after Deployments
+- **WHEN** the sidebar is rendered for any authenticated user
+- **THEN** the PROCESS STUDIO section SHALL contain "Process Intelligence" immediately after "Deployments"
+
+#### Scenario: Process Intelligence navigates to coming-soon
+- **WHEN** a user clicks "Process Intelligence"
+- **THEN** the browser SHALL navigate to `/coming-soon`
+
+#### Scenario: Process Intelligence uses a bulb icon
+- **WHEN** the sidebar renders the PROCESS STUDIO group
+- **THEN** the "Process Intelligence" item SHALL display `IconBulb`
+
 ### Requirement: AGENT STUDIO group
 The AGENT STUDIO group SHALL contain seven menu items in order: "Agent Flows", "Executions", "Assistants", "Tools", "Credentials", "Variables", and "Versions & Promotion". "Versions & Promotion" SHALL link to `/agentops` and use a Git branching icon (`IconGitBranch`). "Executions" SHALL link to `/executions` with permission `executions:view`.
 

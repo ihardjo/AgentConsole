@@ -1,6 +1,6 @@
 ## Context
 
-The `reinvention-menu` change introduced a new 6-group sidebar structure via `reinventionDashboard.js`. Six issues were found after initial implementation and addressed in this change:
+The `reinvention-menu` change introduced a new 6-group sidebar structure via `reinventionDashboard.js`. Seven issues were found after initial implementation and addressed in this change:
 
 1. **Empty section at the top**: `NavGroup` renders a `<List>` for the empty `primary` group, producing a blank padded area before PROCESS STUDIO.
 2. **Missing Executions item**: The "Executions" page (`/executions`) exists and has a permission gate (`executions:view`) but was omitted from AGENT STUDIO.
@@ -8,6 +8,7 @@ The `reinvention-menu` change introduced a new 6-group sidebar structure via `re
 4. **Redundant top divider on PROCESS STUDIO**: `NavGroup` renders a `<Divider>` before every non-primary group, including the first one, producing an unnecessary top line above PROCESS STUDIO.
 5. **Hamburger icon on wrong side of logo**: The sidebar toggle (`IconMenu2`) renders to the right of the application logo; it should be on the left for standard navigation conventions.
 6. **Indistinguishable OBSERVABILITY icons**: "Process Performance" and "Agent Performance" both used `IconChartBar`, making them visually identical.
+7. **Missing Process Intelligence placeholder**: PROCESS STUDIO is missing a "Process Intelligence" entry after "Deployments" — it should exist as a coming-soon placeholder alongside the other forthcoming PROCESS STUDIO items.
 
 ## Goals / Non-Goals
 
@@ -19,7 +20,8 @@ The `reinvention-menu` change introduced a new 6-group sidebar structure via `re
 - Set "Agent Performance" to `/coming-soon` with `alwaysShow: true`
 - Move the header hamburger toggle to the left of the application logo
 - Assign distinct, semantically meaningful icons to "Process Performance" (`IconActivity`) and "Agent Performance" (`IconBrain`)
-- Clean up `IconInfinity`; add `IconGitBranch`, `IconListCheck`, `IconActivity`, `IconBrain`
+- Clean up `IconInfinity`; add `IconGitBranch`, `IconListCheck`, `IconActivity`, `IconBrain`, `IconBulb`
+- Add "Process Intelligence" item to PROCESS STUDIO after "Deployments", routing to `/coming-soon` with `alwaysShow: true` and icon `IconBulb`
 
 **Non-Goals:**
 - Structural changes to any other component or route
@@ -59,8 +61,15 @@ The `reinvention-menu` change introduced a new 6-group sidebar structure via `re
 
 **Rationale**: `IconActivity` (heartbeat/pulse line) visually represents process flow and throughput monitoring. `IconBrain` communicates AI/agent cognitive performance, clearly differentiating it from generic process metrics.
 
+### Decision 6: Process Intelligence icon and placement
+
+**Choice**: `IconBulb` placed immediately after "Deployments" in PROCESS STUDIO.
+
+**Rationale**: `IconBulb` conveys insight and intelligence without conflicting with any existing icon in the sidebar. Positioning it after "Deployments" keeps the forthcoming PROCESS STUDIO items grouped at the bottom of the section, consistent with the placeholder pattern already used for "Reinvention Processes" and "Deployments".
+
 ## Risks / Trade-offs
 
 - **`NavGroup` conditional render** → Only affects the primary section and the first-group divider. Low risk; non-primary groups are unaffected.
 - **Header DOM reorder** → Pure visual swap; no functional change to toggle behaviour.
 - **`IconInfinity` removal** → Only used for Agent Performance in `reinventionDashboard.js`. Safe to remove.
+- **`IconBulb` addition** → New import; no conflict with existing icons.

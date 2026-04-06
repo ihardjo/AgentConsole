@@ -398,7 +398,7 @@ const APIKey = () => {
                             searchValue={search}
                             searchPlaceholder='Search API Keys'
                             title='API Keys'
-                            description='Flowise API & SDK authentication keys'
+                            description='API & SDK authentication keys'
                         >
                             <PermissionButton
                                 permissionId={'apikeys:import'}

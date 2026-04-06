@@ -48,3 +48,21 @@
 - [ ] 7.3 Manually verify: `/user-management` and `/role-management` are no longer matched routes
 - [ ] 7.4 Manually verify: PLATFORM sidebar "Users & Roles" item navigates to `/user-role-management`
 - [ ] 7.5 Manually verify: user with only `users:manage` sees only "Users" tab; user with only `roles:manage` sees only "Roles" tab
+
+## 8. UI Redesign — Merged Header
+
+- [x] 8.1 Refactor `packages/ui/src/views/user-role-management/users/index.jsx`: remove outer `<MainCard>` wrapper; remove `<ViewHeader>` and its `StyledPermissionButton`; accept `search` string prop and replace internal `search` state/`onSearchChange` with the prop; keep all remaining state, API calls, table, and dialogs
+- [x] 8.2 Refactor `packages/ui/src/views/user-role-management/roles/index.jsx`: remove outer `<MainCard>` wrapper; remove `<ViewHeader>` and its `StyledPermissionButton`; accept `search` string prop and replace internal `search` state/`onSearchChange` with the prop; keep all remaining state, API calls, table, and dialogs
+- [x] 8.3 Expose action callbacks from sub-views: add `onAdd` prop to `users/index.jsx` (called instead of internal `addNew`); add `onAdd` prop to `roles/index.jsx` (called instead of internal `addNew`)
+- [x] 8.4 Rewrite `packages/ui/src/views/user-role-management/index.jsx`: add `MainCard`, `ViewHeader` (title "Users & Roles"), `Tabs` row below header, and tab-panel content; manage `search` state and reset on tab change; derive placeholder ("Search Users"/"Search Roles") and action button ("Invite User"/"Add Role") from `activeTab`; pass `search` and `onAdd` props into the active sub-view
+- [x] 8.5 Add `StyledPermissionButton` with `permissionId={'workspace:add-user,users:manage'}` and label "Invite User" as the action button in `ViewHeader` children when Users tab active
+- [x] 8.6 Add `StyledPermissionButton` with `permissionId={'roles:manage'}` and label "Add Role" as the action button in `ViewHeader` children when Roles tab active
+- [x] 8.7 Run `get_errors` on all three modified files and confirm zero errors
+
+## 9. Post-Redesign Verification
+
+- [ ] 9.1 Manually verify: single card boundary renders — no nested cards
+- [ ] 9.2 Manually verify: title "Users & Roles" is always shown in header
+- [ ] 9.3 Manually verify: switching to Roles tab updates search placeholder and action button
+- [ ] 9.4 Manually verify: Users table columns (icon, Email/Name, Assigned Roles, Status, Last Login, actions) are preserved
+- [ ] 9.5 Manually verify: Roles table columns (Name, Description, Permissions, Assigned Users, actions) are preserved

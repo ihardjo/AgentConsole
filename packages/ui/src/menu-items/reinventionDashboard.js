@@ -21,7 +21,8 @@ import {
     IconListCheck,
     IconGitBranch,
     IconActivity,
-    IconBrain
+    IconBrain,
+    IconBulb
 } from '@tabler/icons-react'
 
 // constant
@@ -47,7 +48,8 @@ const icons = {
     IconListCheck,
     IconGitBranch,
     IconActivity,
-    IconBrain
+    IconBrain,
+    IconBulb
 }
 
 // ==============================|| REINVENTION DASHBOARD MENU ITEMS ||============================== //
@@ -86,6 +88,15 @@ const reinventionDashboard = {
                     type: 'item',
                     url: '/coming-soon',
                     icon: icons.IconArrowsExchange,
+                    breadcrumbs: true,
+                    alwaysShow: true
+                },
+                {
+                    id: 'process-intelligence',
+                    title: 'Process Intelligence',
+                    type: 'item',
+                    url: '/coming-soon',
+                    icon: icons.IconBulb,
                     breadcrumbs: true,
                     alwaysShow: true
                 }

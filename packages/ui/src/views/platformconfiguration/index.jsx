@@ -577,28 +577,6 @@ const AssetManager = ({
 
 // ==============================|| PLATFORM CONFIGURATION ||============================== //
 
-// Helper function to update favicon in the document head
-const updateFavicon = () => {
-    // Use the public route that serves the active favicon (no auth required)
-    // Add timestamp to bust browser cache
-    const faviconUrl = `/api/v1/platform-configuration/favicon?t=${Date.now()}`
-    
-    // Find existing favicon link or create new one
-    let faviconLink = document.querySelector("link[rel*='icon']")
-    if (!faviconLink) {
-        faviconLink = document.createElement('link')
-        faviconLink.rel = 'icon'
-        document.head.appendChild(faviconLink)
-    }
-    faviconLink.href = faviconUrl
-    
-    // Also update apple-touch-icon if it exists
-    const appleTouchIcon = document.querySelector("link[rel='apple-touch-icon']")
-    if (appleTouchIcon) {
-        appleTouchIcon.href = faviconUrl
-    }
-}
-
 // Helper function to reset favicon to default
 const resetFavicon = () => {
     let faviconLink = document.querySelector("link[rel*='icon']")
@@ -630,7 +608,7 @@ const triggerAppNameUpdate = () => {
 const PlatformConfiguration = () => {
     const theme = useTheme()
     const customization = useSelector((state) => state.customization)
-    const { updateDocumentTitle } = useConfig()
+    const { updateDocumentTitle, updateFavicon } = useConfig()
     const { error, setError } = useError()
 
     // API hooks
@@ -810,7 +788,7 @@ const PlatformConfiguration = () => {
             
             // Hot reload: Update the asset in the browser immediately
             if (assetType === 'favicon') {
-                updateFavicon() // Uses public route to fetch active favicon
+                updateFavicon(true) // Uses public route to fetch active favicon
                 triggerFaviconUpdate() // Trigger event for other components
             } else if (assetType === 'logo') {
                 triggerLogoUpdate()

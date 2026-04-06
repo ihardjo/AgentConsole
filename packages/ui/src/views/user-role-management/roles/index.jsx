@@ -1,19 +1,15 @@
-import React from 'react'
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { enqueueSnackbar as enqueueSnackbarAction, closeSnackbar as closeSnackbarAction } from '@/store/actions'
 import * as PropTypes from 'prop-types'
 
 // material-ui
-import { styled } from '@mui/material/styles'
-import { tableCellClasses } from '@mui/material/TableCell'
 import {
     Box,
     Skeleton,
     Stack,
     Table,
     TableBody,
-    TableCell,
     TableContainer,
     TableHead,
     TableRow,
@@ -25,12 +21,11 @@ import {
 } from '@mui/material'
 
 // project imports
-import MainCard from '@/ui-component/cards/MainCard'
-import { PermissionIconButton, StyledPermissionButton } from '@/ui-component/button/RBACButtons'
+import { PermissionIconButton } from '@/ui-component/button/RBACButtons'
 import ConfirmDialog from '@/ui-component/dialog/ConfirmDialog'
-import ViewHeader from '@/layout/MainLayout/ViewHeader'
 import ErrorBoundary from '@/ErrorBoundary'
 import CreateEditRoleDialog from './CreateEditRoleDialog'
+import { StyledTableCell, StyledTableRow } from '@/ui-component/table/TableStyles'
 
 // API
 import authApi from '@/api/auth'
@@ -45,29 +40,10 @@ import useConfirm from '@/hooks/useConfirm'
 import useNotifier from '@/utils/useNotifier'
 
 // Icons
-import { IconEdit, IconPlus, IconEye, IconEyeOff, IconX, IconTrash } from '@tabler/icons-react'
+import { IconEdit, IconEye, IconEyeOff, IconX, IconTrash } from '@tabler/icons-react'
 import roles_emptySVG from '@/assets/images/roles_empty.svg'
 
 import { useError } from '@/store/context/ErrorContext'
-
-const StyledTableCell = styled(TableCell)(({ theme }) => ({
-    borderColor: theme.palette.grey[900] + 25,
-
-    [`&.${tableCellClasses.head}`]: {
-        color: theme.palette.grey[900]
-    },
-    [`&.${tableCellClasses.body}`]: {
-        fontSize: 14,
-        height: 48
-    }
-}))
-
-const StyledTableRow = styled(TableRow)(() => ({
-    // hide last border
-    '&:last-child td, &:last-child th': {
-        border: 0
-    }
-}))
 
 function ViewPermissionsDrawer(props) {
     const theme = useTheme()
@@ -203,7 +179,7 @@ function ShowRoleRow(props) {
     }, [getAllUsersByRoleIdApi.data])
 
     useEffect(() => {
-        if (open && selectedRoleId) {
+        if (openAssignedUsersDrawer && selectedRoleId) {
             getAllUsersByRoleIdApi.request(selectedRoleId)
         } else {
             setOpenAssignedUsersDrawer(false)
@@ -233,10 +209,10 @@ function ShowRoleRow(props) {
                             }}
                         >
                             {JSON.parse(props.role.permissions).map((d, key) => (
-                                <React.Fragment key={key}>
+                                <Fragment key={key}>
                                     {d}
                                     {', '}
-                                </React.Fragment>
+                                </Fragment>
                             ))}
                         </Typography>
                         <PermissionIconButton
@@ -323,18 +299,14 @@ function ShowRoleRow(props) {
 }
 
 ShowRoleRow.propTypes = {
-    key: PropTypes.any,
     role: PropTypes.any,
-    onViewClick: PropTypes.func,
     onEditClick: PropTypes.func,
-    onDeleteClick: PropTypes.func,
-    open: PropTypes.bool,
-    theme: PropTypes.any
+    onDeleteClick: PropTypes.func
 }
 
 // ==============================|| Role Management ||============================== //
 
-const RoleManagement = () => {
+const RoleManagement = ({ search = '', onAdd }) => {
     const theme = useTheme()
     const customization = useSelector((state) => state.customization)
     const dispatch = useDispatch()
@@ -355,13 +327,8 @@ const RoleManagement = () => {
     const getAllRolesByOrganizationIdApi = useApi(roleManagementApi.getAllRolesByOrganizationId)
 
     const [roles, setRoles] = useState([])
-    const [search, setSearch] = useState('')
 
-    const onSearchChange = (event) => {
-        setSearch(event.target.value)
-    }
-
-    function filterUsers(data) {
+    function filterRoles(data) {
         return (
             (data.name && data.name.toLowerCase().indexOf(search.toLowerCase()) > -1) ||
             (data.description && data.description.toLowerCase().indexOf(search.toLowerCase()) > -1)
@@ -379,24 +346,17 @@ const RoleManagement = () => {
         setShowCreateEditDialog(true)
     }
 
+    // Register addNew handler with the wrapper so the shared action button can call it
+    useEffect(() => {
+        if (onAdd) onAdd(addNew)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+
     const edit = (role) => {
         const dialogProp = {
             type: 'EDIT',
             cancelButtonName: 'Cancel',
             confirmButtonName: 'Update',
-            data: {
-                ...role
-            }
-        }
-        setDialogProps(dialogProp)
-        setShowCreateEditDialog(true)
-    }
-
-    const view = (role) => {
-        const dialogProp = {
-            type: 'VIEW',
-            cancelButtonName: 'Close',
-            confirmButtonName: '',
             data: {
                 ...role
             }
@@ -480,118 +440,80 @@ const RoleManagement = () => {
 
     return (
         <>
-            <MainCard>
-                {error ? (
-                    <ErrorBoundary error={error} />
-                ) : (
-                    <Stack flexDirection='column' sx={{ gap: 3 }}>
-                        <ViewHeader onSearchChange={onSearchChange} search={true} searchPlaceholder='Search Roles' title='Role Management'>
-                            <StyledPermissionButton
-                                permissionId={'roles:manage'}
-                                variant='contained'
-                                sx={{ borderRadius: 2, height: '100%' }}
-                                onClick={addNew}
-                                startIcon={<IconPlus />}
-                                id='btn_createRole'
-                            >
-                                Add Role
-                            </StyledPermissionButton>
-                        </ViewHeader>
-                        {!isLoading && roles.length === 0 ? (
-                            <Stack sx={{ alignItems: 'center', justifyContent: 'center' }} flexDirection='column'>
-                                <Box sx={{ p: 2, height: 'auto' }}>
-                                    <img
-                                        style={{ objectFit: 'cover', height: '20vh', width: 'auto' }}
-                                        src={roles_emptySVG}
-                                        alt='roles_emptySVG'
-                                    />
-                                </Box>
-                                <div>No Roles Yet</div>
-                            </Stack>
-                        ) : (
-                            <>
-                                <Stack flexDirection='row'>
-                                    <Box sx={{ p: 2, height: 'auto', width: '100%' }}>
-                                        <TableContainer
-                                            style={{ display: 'flex', flexDirection: 'row' }}
-                                            sx={{ border: 1, borderColor: theme.palette.grey[900] + 25, borderRadius: 2 }}
-                                            component={Paper}
-                                        >
-                                            <Table sx={{ minWidth: 650 }} aria-label='roles table'>
-                                                <TableHead
-                                                    sx={{
-                                                        backgroundColor: customization.isDarkMode
-                                                            ? theme.palette.common.black
-                                                            : theme.palette.grey[100],
-                                                        height: 56
-                                                    }}
-                                                >
-                                                    <TableRow>
-                                                        <StyledTableCell>Name</StyledTableCell>
-                                                        <StyledTableCell>Description</StyledTableCell>
-                                                        <StyledTableCell>Permissions</StyledTableCell>
-                                                        <StyledTableCell>Assigned Users</StyledTableCell>
-                                                        <StyledTableCell> </StyledTableCell>
-                                                    </TableRow>
-                                                </TableHead>
-                                                <TableBody>
-                                                    {isLoading ? (
-                                                        <>
-                                                            <StyledTableRow>
-                                                                <StyledTableCell>
-                                                                    <Skeleton variant='text' />
-                                                                </StyledTableCell>
-                                                                <StyledTableCell>
-                                                                    <Skeleton variant='text' />
-                                                                </StyledTableCell>
-                                                                <StyledTableCell>
-                                                                    <Skeleton variant='text' />
-                                                                </StyledTableCell>
-                                                                <StyledTableCell>
-                                                                    <Skeleton variant='text' />
-                                                                </StyledTableCell>
-                                                                <StyledTableCell>
-                                                                    <Skeleton variant='text' />
-                                                                </StyledTableCell>
-                                                            </StyledTableRow>
-                                                            <StyledTableRow>
-                                                                <StyledTableCell>
-                                                                    <Skeleton variant='text' />
-                                                                </StyledTableCell>
-                                                                <StyledTableCell>
-                                                                    <Skeleton variant='text' />
-                                                                </StyledTableCell>
-                                                                <StyledTableCell>
-                                                                    <Skeleton variant='text' />
-                                                                </StyledTableCell>
-                                                                <StyledTableCell>
-                                                                    <Skeleton variant='text' />
-                                                                </StyledTableCell>
-                                                            </StyledTableRow>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            {roles.filter(filterUsers).map((role, index) => (
-                                                                <ShowRoleRow
-                                                                    role={role}
-                                                                    key={index}
-                                                                    onEditClick={edit}
-                                                                    onViewClick={view}
-                                                                    onDeleteClick={deleteRole}
-                                                                />
-                                                            ))}
-                                                        </>
-                                                    )}
-                                                </TableBody>
-                                            </Table>
-                                        </TableContainer>
-                                    </Box>
-                                </Stack>
-                            </>
-                        )}
-                    </Stack>
-                )}
-            </MainCard>
+            {error ? (
+                <ErrorBoundary error={error} />
+            ) : (
+                <Stack flexDirection='column' sx={{ gap: 3 }}>
+                    {!isLoading && roles.length === 0 ? (
+                        <Stack sx={{ alignItems: 'center', justifyContent: 'center' }} flexDirection='column'>
+                            <Box sx={{ p: 2, height: 'auto' }}>
+                                <img
+                                    style={{ objectFit: 'cover', height: '20vh', width: 'auto' }}
+                                    src={roles_emptySVG}
+                                    alt='roles_emptySVG'
+                                />
+                            </Box>
+                            <div>No Roles Yet</div>
+                        </Stack>
+                    ) : (
+                        <TableContainer
+                            style={{ display: 'flex', flexDirection: 'row' }}
+                            sx={{ border: 1, borderColor: theme.palette.grey[900] + 25, borderRadius: 2 }}
+                            component={Paper}
+                        >
+                            <Table sx={{ minWidth: 650 }} aria-label='roles table'>
+                                <TableHead
+                                    sx={{
+                                        backgroundColor: customization.isDarkMode
+                                            ? theme.palette.common.black
+                                            : theme.palette.grey[100],
+                                        height: 56
+                                    }}
+                                >
+                                    <TableRow>
+                                        <StyledTableCell>Name</StyledTableCell>
+                                        <StyledTableCell>Description</StyledTableCell>
+                                        <StyledTableCell>Permissions</StyledTableCell>
+                                        <StyledTableCell>Assigned Users</StyledTableCell>
+                                        <StyledTableCell> </StyledTableCell>
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    {isLoading ? (
+                                        <>
+                                            <StyledTableRow>
+                                                <StyledTableCell><Skeleton variant='text' /></StyledTableCell>
+                                                <StyledTableCell><Skeleton variant='text' /></StyledTableCell>
+                                                <StyledTableCell><Skeleton variant='text' /></StyledTableCell>
+                                                <StyledTableCell><Skeleton variant='text' /></StyledTableCell>
+                                                <StyledTableCell><Skeleton variant='text' /></StyledTableCell>
+                                            </StyledTableRow>
+                                            <StyledTableRow>
+                                                <StyledTableCell><Skeleton variant='text' /></StyledTableCell>
+                                                <StyledTableCell><Skeleton variant='text' /></StyledTableCell>
+                                                <StyledTableCell><Skeleton variant='text' /></StyledTableCell>
+                                                <StyledTableCell><Skeleton variant='text' /></StyledTableCell>
+                                                <StyledTableCell><Skeleton variant='text' /></StyledTableCell>
+                                            </StyledTableRow>
+                                        </>
+                                    ) : (
+                                        <>
+                                            {roles.filter(filterRoles).map((role, index) => (
+                                                <ShowRoleRow
+                                                    role={role}
+                                                    key={index}
+                                                    onEditClick={edit}
+                                                    onDeleteClick={deleteRole}
+                                                />
+                                            ))}
+                                        </>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </TableContainer>
+                    )}
+                </Stack>
+            )}
             {showCreateEditDialog && (
                 <CreateEditRoleDialog
                     show={showCreateEditDialog}
@@ -604,6 +526,11 @@ const RoleManagement = () => {
             <ConfirmDialog />
         </>
     )
+}
+
+RoleManagement.propTypes = {
+    search: PropTypes.string,
+    onAdd: PropTypes.func
 }
 
 export default RoleManagement

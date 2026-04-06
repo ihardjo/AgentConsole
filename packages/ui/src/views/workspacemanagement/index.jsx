@@ -464,6 +464,7 @@ const WorkspaceManagement = () => {
                             search={true}
                             searchValue={search}
                             title='Workspace Management'
+                            description='Organise your work into separate, permission-controlled environments'
                             searchPlaceholder='Search Workspaces'
                         >
                             <StyledPermissionButton

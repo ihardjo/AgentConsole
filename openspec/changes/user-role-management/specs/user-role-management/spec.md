@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Unified Users & Roles view at single route
-The system SHALL provide a single page at `/user-role-management` that combines Users management and Roles management under a tabbed interface. The page SHALL be accessible to any user holding at least one of the permissions `users:manage` or `roles:manage`.
+The system SHALL provide a single page at `/user-role-management` consisting of one card with a shared page header (title "Users & Roles", search bar, action button) followed by a tab row ("Users", "Roles"), with the active tab's table content rendered directly below. The page SHALL be accessible to any user holding at least one of the permissions `users:manage` or `roles:manage`.
 
 #### Scenario: User with users:manage navigates to /user-role-management
 - **WHEN** a user with `users:manage` permission navigates to `/user-role-management`
@@ -30,16 +30,34 @@ The system SHALL show only tabs for which the current user has the corresponding
 - **WHEN** a user with `users:manage` but without `roles:manage` views the page
 - **THEN** the "Roles" tab SHALL NOT be visible
 
-### Requirement: Tab switching renders correct content
-The system SHALL render the UserManagement content when the "Users" tab is active, and RoleManagement content when the "Roles" tab is active.
+### Requirement: Shared header with context-sensitive controls
+The page header SHALL display the title "Users & Roles" at all times. The search bar placeholder and action button SHALL reflect the active tab: "Search Users" / "Invite User" button when Users tab is active; "Search Roles" / "Add Role" button when Roles tab is active. The action buttons SHALL respect their existing permission gates (`workspace:add-user,users:manage` and `roles:manage` respectively).
 
-#### Scenario: Switching to Roles tab
-- **WHEN** the user clicks the "Roles" tab
-- **THEN** the system SHALL display the Roles management content and hide the Users management content
+#### Scenario: Users tab active — header controls
+- **WHEN** the "Users" tab is active
+- **THEN** the search bar placeholder SHALL read "Search Users" and the action button SHALL read "Invite User"
 
-#### Scenario: Switching to Users tab
-- **WHEN** the user clicks the "Users" tab
-- **THEN** the system SHALL display the Users management content and hide the Roles management content
+#### Scenario: Roles tab active — header controls
+- **WHEN** the "Roles" tab is active
+- **THEN** the search bar placeholder SHALL read "Search Roles" and the action button SHALL read "Add Role"
+
+### Requirement: Tabs positioned below header inside single card
+The `Tabs` row SHALL appear directly below the `ViewHeader` within the same `MainCard`. There SHALL be no nested `MainCard` or secondary header inside each tab panel.
+
+#### Scenario: Single card layout
+- **WHEN** a user navigates to `/user-role-management`
+- **THEN** the page SHALL render exactly one card boundary, with header and tabs both inside it
+
+### Requirement: Table content and behaviour preserved
+The Users table (columns: icon, Email/Name, Assigned Roles, Status, Last Login, actions) and Roles table (columns: Name, Description, Permissions, Assigned Users, actions) SHALL be fully preserved — same columns, same row components, same dialogs and drawers.
+
+#### Scenario: Users table columns unchanged
+- **WHEN** the "Users" tab is active
+- **THEN** the table SHALL display the same columns as the previous standalone User Management view
+
+#### Scenario: Roles table columns unchanged
+- **WHEN** the "Roles" tab is active
+- **THEN** the table SHALL display the same columns as the previous standalone Role Management view
 
 ### Requirement: Sidebar menu item points to unified route
 The PLATFORM group in the sidebar SHALL contain a single "Users & Roles" item with URL `/user-role-management`. The separate "Users" and "Roles" menu items SHALL NOT exist.

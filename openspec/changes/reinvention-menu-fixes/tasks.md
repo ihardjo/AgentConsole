@@ -41,3 +41,11 @@
 - [ ] 8.5 Confirm "Agent Performance" navigates to `/coming-soon` and displays `IconBrain`
 - [ ] 8.6 Confirm "Process Performance" displays `IconActivity`
 - [ ] 8.7 Confirm the hamburger toggle appears to the left of the application logo in the header
+
+## 9. Add Process Intelligence to PROCESS STUDIO
+
+- [x] 9.1 Add `IconBulb` to the import list from `@tabler/icons-react` in `reinventionDashboard.js`
+- [x] 9.2 Add `IconBulb` to the `icons` constant object in `reinventionDashboard.js`
+- [x] 9.3 Add the "Process Intelligence" menu item (`id: 'process-intelligence'`, `title: 'Process Intelligence'`, `type: 'item'`, `url: '/coming-soon'`, `icon: icons.IconBulb`, `breadcrumbs: true`, `alwaysShow: true`) immediately after the "Deployments" item in the PROCESS STUDIO group
+- [x] 9.4 Run `get_errors` on `reinventionDashboard.js` and confirm zero errors
+- [ ] 9.5 Manually verify: "Process Intelligence" appears immediately after "Deployments" in the PROCESS STUDIO sidebar group and navigates to `/coming-soon`

@@ -17,12 +17,12 @@ export const usePlatformConfig = () => {
                     }
                 }
 
-                // Load favicon
-                const faviconResponse = await fetch(`${window.location.origin}/api/v1/platform-configuration/favicon?t=${Date.now()}`)
-                if (faviconResponse.ok) {
-                    const blob = await faviconResponse.blob()
-                    const faviconUrl = URL.createObjectURL(blob)
-                    
+                // Load favicon — use URL-based approach (no Blob URL, no memory leak)
+                // Add timestamp to bust browser cache
+                const faviconCheckResponse = await fetch(`${window.location.origin}/api/v1/platform-configuration/favicon?t=${Date.now()}`)
+                if (faviconCheckResponse.ok) {
+                    const faviconUrl = `${window.location.origin}/api/v1/platform-configuration/favicon?t=${Date.now()}`
+
                     // Update favicon link
                     let faviconLink = document.querySelector("link[rel*='icon']")
                     if (!faviconLink) {
@@ -54,14 +54,18 @@ export const usePlatformConfig = () => {
             loadPlatformConfig()
         }
 
+        const handleAppNameUpdate = () => {
+            loadPlatformConfig()
+        }
+
         window.addEventListener('platformLogoUpdated', handleLogoUpdate)
         window.addEventListener('platformFaviconUpdated', handleFaviconUpdate)
-        window.addEventListener('platformAppNameUpdated', handleLogoUpdate)
+        window.addEventListener('platformAppNameUpdated', handleAppNameUpdate)
 
         return () => {
             window.removeEventListener('platformLogoUpdated', handleLogoUpdate)
             window.removeEventListener('platformFaviconUpdated', handleFaviconUpdate)
-            window.removeEventListener('platformAppNameUpdated', handleLogoUpdate)
+            window.removeEventListener('platformAppNameUpdated', handleAppNameUpdate)
         }
     }, [])
 }
