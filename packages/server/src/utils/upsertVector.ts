@@ -38,6 +38,7 @@ import { getWorkspaceSearchOptions } from '../enterprise/utils/ControllerService
 import { OMIT_QUEUE_JOB_DATA } from './constants'
 import { Workspace } from '../custom-rbac/entities/workspace.entity'
 import { Organization } from '../custom-rbac/entities/organization.entity'
+import { getWorkspaceQueue } from '../queue/queueUtils'
 
 export const executeUpsert = async ({
     componentNodes,
@@ -303,28 +304,11 @@ export const upsertVector = async (req: Request, isInternal: boolean = false) =>
             productId
         }
 
-        if (process.env.MODE === MODE.QUEUE_DEDICATED_WORKSPACE && workspaceId) {
-            const upsertQueue = appServer.queueManager.getOrCreateWorkspaceQueue('upsert', workspaceId)
+        if (process.env.MODE === MODE.QUEUE) {
+            const upsertQueue = await getWorkspaceQueue('upsert', workspace, appServer.queueManager)
 
             const job = await upsertQueue.addJob(omit(executeData, OMIT_QUEUE_JOB_DATA))
-            logger.debug(`[server]: [${orgId}]: Job added to workspace upsert queue: ${job.id}`)
-
-            const queueEvents = upsertQueue.getQueueEvents()
-            const result = await job.waitUntilFinished(queueEvents)
-
-            if (!result) {
-                throw new Error('Job execution failed')
-            }
-
-            appServer.metricsProvider?.incrementCounter(FLOWISE_METRIC_COUNTERS.VECTORSTORE_UPSERT, {
-                status: FLOWISE_COUNTER_STATUS.SUCCESS
-            })
-            return result
-        } else if (process.env.MODE === MODE.QUEUE) {
-            const upsertQueue = appServer.queueManager.getQueue('upsert')
-
-            const job = await upsertQueue.addJob(omit(executeData, OMIT_QUEUE_JOB_DATA))
-            logger.debug(`[server]: [${orgId}]: Job added to queue: ${job.id}`)
+            logger.debug(`[server]: [${orgId}]: Job added to upsert queue: ${job.id}`)
 
             const queueEvents = upsertQueue.getQueueEvents()
             const result = await job.waitUntilFinished(queueEvents)

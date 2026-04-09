@@ -16,7 +16,7 @@ import logger from '../utils/logger'
 
 const QUEUE_NAME = process.env.QUEUE_NAME || 'flowise-queue'
 
-type QUEUE_TYPE = 'prediction' | 'upsert'
+export type QUEUE_TYPE = 'prediction' | 'upsert'
 
 export class QueueManager {
     private static instance: QueueManager
@@ -24,6 +24,7 @@ export class QueueManager {
     private connection: RedisOptions
     private bullBoardRouter?: Express
     private serverAdapter?: ExpressAdapter
+    private bullBoardApi?: { addQueue: (q: BullMQAdapter) => void; replaceQueues: (qs: ReadonlyArray<BullMQAdapter>) => void }
     private predictionQueueEventsProducer?: QueueEventsProducer
     private workspaceQueueEventsProducers: Map<string, QueueEventsProducer> = new Map()
 
@@ -97,8 +98,12 @@ export class QueueManager {
 
     /**
      * Returns the workspace-scoped queue for the given type and workspaceId.
-     * Lazily creates and caches the queue under key `<type>:<workspaceId>`.
-     * Queue name: `<QUEUE_NAME>-<type>-<workspaceId>`
+     * Lazily creates and caches the queue under key `<queueName>:<workspaceId>:<type>`.
+     * Queue name: `<QUEUE_NAME>-<workspaceId>-<type>`
+     *
+     * TODO: Each workspace queue currently opens its own IORedis connection via `this.connection`.
+     * A future optimisation is to share a single IORedis connection (or a small pool) across all
+     * workspace queues to reduce the total number of open Redis connections.
      */
     public getOrCreateWorkspaceQueue(
         type: QUEUE_TYPE,
@@ -112,21 +117,21 @@ export class QueueManager {
             usageCacheManager?: UsageCacheManager
         }
     ): BaseQueue {
-        const cacheKey = `${type}:${workspaceId}`
+        const cacheKey = `${QUEUE_NAME}:${workspaceId}:${type}`
         const existing = this.queues.get(cacheKey)
         if (existing) return existing
 
-        const queueName = `${QUEUE_NAME}-${type === 'prediction' ? 'prediction' : 'upsertion'}-${workspaceId}`
+        const queueName = `${QUEUE_NAME}-${workspaceId}-${type === 'prediction' ? 'prediction' : 'upsertion'}`
 
         let queue: BaseQueue
         if (type === 'prediction') {
             queue = new PredictionQueue(queueName, this.connection, {
                 componentNodes: options?.componentNodes ?? ({} as IComponentNodes),
-                telemetry: options?.telemetry ?? (undefined as any),
-                cachePool: options?.cachePool ?? (undefined as any),
-                appDataSource: options?.appDataSource ?? (undefined as any),
-                abortControllerPool: options?.abortControllerPool ?? (undefined as any),
-                usageCacheManager: options?.usageCacheManager ?? (undefined as any)
+                telemetry: options?.telemetry,
+                cachePool: options?.cachePool,
+                appDataSource: options?.appDataSource,
+                abortControllerPool: options?.abortControllerPool,
+                usageCacheManager: options?.usageCacheManager
             })
             // QueueEventsProducer required for abort event propagation on this workspace queue
             const producer = new QueueEventsProducer(queueName, { connection: this.connection })
@@ -134,28 +139,29 @@ export class QueueManager {
         } else {
             queue = new UpsertQueue(queueName, this.connection, {
                 componentNodes: options?.componentNodes ?? ({} as IComponentNodes),
-                telemetry: options?.telemetry ?? (undefined as any),
-                cachePool: options?.cachePool ?? (undefined as any),
-                appDataSource: options?.appDataSource ?? (undefined as any),
-                usageCacheManager: options?.usageCacheManager ?? (undefined as any)
+                telemetry: options?.telemetry,
+                cachePool: options?.cachePool,
+                appDataSource: options?.appDataSource,
+                usageCacheManager: options?.usageCacheManager
             })
         }
 
         this.queues.set(cacheKey, queue)
 
-        // Dynamically register with BullBoard if adapter is available
-        if (this.serverAdapter) {
-            const allAdapters = new Map(Array.from(this.queues.entries()).map(([k, q]) => [k, new BullMQAdapter(q.getQueue())]))
-            this.serverAdapter.setQueues(allAdapters)
+        // Incrementally register the new queue with BullBoard (avoids full map rebuild)
+        if (this.bullBoardApi) {
+            this.bullBoardApi.addQueue(new BullMQAdapter(queue.getQueue()))
         }
 
         return queue
     }
 
     /**
-     * Worker-side initialisation for `queue-dedicated-workspace` mode.
-     * Creates and registers only the two workspace-scoped queues (prediction + upsert).
-     * Does NOT touch legacy global queues.
+     * Worker-side initialisation for dedicated-queue mode (`MODE=queue` + `WORKER_WORKSPACE_ID` set).
+     * Eagerly creates both workspace-scoped queues (prediction + upsert) by delegating to
+     * `getOrCreateWorkspaceQueue`, ensuring they are cached and available before the worker starts.
+     *
+     * Returns the two created queues so callers can attach workers without a second look-up.
      */
     public setupWorkspaceQueue(
         workspaceId: string,
@@ -167,23 +173,10 @@ export class QueueManager {
             abortControllerPool: AbortControllerPool
             usageCacheManager: UsageCacheManager
         }
-    ) {
-        const predictionQueueName = `${QUEUE_NAME}-prediction-${workspaceId}`
-        const predictionQueue = new PredictionQueue(predictionQueueName, this.connection, options)
-        this.queues.set(`prediction:${workspaceId}`, predictionQueue)
-
-        const producer = new QueueEventsProducer(predictionQueueName, { connection: this.connection })
-        this.workspaceQueueEventsProducers.set(`prediction:${workspaceId}`, producer)
-
-        const upsertionQueueName = `${QUEUE_NAME}-upsertion-${workspaceId}`
-        const upsertionQueue = new UpsertQueue(upsertionQueueName, this.connection, {
-            componentNodes: options.componentNodes,
-            telemetry: options.telemetry,
-            cachePool: options.cachePool,
-            appDataSource: options.appDataSource,
-            usageCacheManager: options.usageCacheManager
-        })
-        this.queues.set(`upsert:${workspaceId}`, upsertionQueue)
+    ): { predictionQueue: BaseQueue; upsertQueue: BaseQueue } {
+        const predictionQueue = this.getOrCreateWorkspaceQueue('prediction', workspaceId, options)
+        const upsertQueue = this.getOrCreateWorkspaceQueue('upsert', workspaceId, options)
+        return { predictionQueue, upsertQueue }
     }
 
     /**
@@ -191,8 +184,8 @@ export class QueueManager {
      * Separated from obliterate for testability.
      */
     private async closeWorkspaceQueues(workspaceId: string): Promise<void> {
-        const predictionKey = `prediction:${workspaceId}`
-        const upsertKey = `upsert:${workspaceId}`
+        const predictionKey = `${QUEUE_NAME}:${workspaceId}:prediction`
+        const upsertKey = `${QUEUE_NAME}:${workspaceId}:upsert`
 
         const predProducer = this.workspaceQueueEventsProducers.get(predictionKey)
         if (predProducer) {
@@ -220,11 +213,11 @@ export class QueueManager {
      * 5. Removes BullBoard adapter registrations.
      *
      * Called after workspace deletion DB transaction commits.
-     * Only active in MODE=queue-dedicated-workspace.
+     * Only active in MODE=queue when workspace.dedicatedQueue=true.
      */
     public async teardownWorkspaceQueue(workspaceId: string): Promise<void> {
-        const predictionKey = `prediction:${workspaceId}`
-        const upsertKey = `upsert:${workspaceId}`
+        const predictionKey = `${QUEUE_NAME}:${workspaceId}:prediction`
+        const upsertKey = `${QUEUE_NAME}:${workspaceId}:upsert`
 
         const predQueue = this.queues.get(predictionKey)
         const upsertQueue = this.queues.get(upsertKey)
@@ -270,9 +263,9 @@ export class QueueManager {
         this.queues.delete(upsertKey)
 
         // Deregister from BullBoard
-        if (this.serverAdapter) {
-            const remainingAdapters = new Map(Array.from(this.queues.entries()).map(([k, q]) => [k, new BullMQAdapter(q.getQueue())]))
-            this.serverAdapter.setQueues(remainingAdapters)
+        if (this.bullBoardApi) {
+            const remainingAdapters = Array.from(this.queues.values()).map((q) => new BullMQAdapter(q.getQueue()))
+            this.bullBoardApi.replaceQueues(remainingAdapters)
         }
 
         logger.info(`[QueueManager] Workspace ${workspaceId} queues torn down successfully`)
@@ -284,19 +277,19 @@ export class QueueManager {
     }
 
     public getWorkspaceQueueEventsProducer(workspaceId: string): QueueEventsProducer {
-        const producer = this.workspaceQueueEventsProducers.get(`prediction:${workspaceId}`)
+        const producer = this.workspaceQueueEventsProducers.get(`${QUEUE_NAME}:${workspaceId}:prediction`)
         if (!producer) throw new Error(`No QueueEventsProducer found for workspace ${workspaceId}`)
         return producer
     }
 
     /**
      * Initialises BullBoard with an empty queue list and stores the serverAdapter.
-     * Used in `queue-dedicated-workspace` mode where queues are lazily registered
+     * Used in MODE=queue where workspace queues are lazily registered
      * later via `getOrCreateWorkspaceQueue`.
      */
     public initBullBoard(serverAdapter: ExpressAdapter): void {
         this.serverAdapter = serverAdapter
-        createBullBoard({ queues: [], serverAdapter })
+        this.bullBoardApi = createBullBoard({ queues: [], serverAdapter })
         this.bullBoardRouter = serverAdapter.getRouter()
     }
 
@@ -359,7 +352,7 @@ export class QueueManager {
 
         if (serverAdapter) {
             this.serverAdapter = serverAdapter
-            createBullBoard({
+            this.bullBoardApi = createBullBoard({
                 queues: [new BullMQAdapter(predictionQueue.getQueue()), new BullMQAdapter(upsertionQueue.getQueue())],
                 serverAdapter: serverAdapter
             })

@@ -42,7 +42,7 @@ const createAndStreamInternalPrediction = async (req: Request, res: Response, ne
         res.setHeader('X-Accel-Buffering', 'no') //nginx config: https://serverfault.com/a/801629
         res.flushHeaders()
 
-        if (process.env.MODE === MODE.QUEUE || process.env.MODE === MODE.QUEUE_DEDICATED_WORKSPACE) {
+        if (process.env.MODE === MODE.QUEUE) {
             getRunningExpressApp().redisSubscriber.subscribe(chatId)
         }
 

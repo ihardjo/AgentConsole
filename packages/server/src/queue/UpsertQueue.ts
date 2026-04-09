@@ -17,19 +17,19 @@ import logger from '../utils/logger'
 import { UsageCacheManager } from '../UsageCacheManager'
 
 interface UpsertQueueOptions {
-    appDataSource: DataSource
-    telemetry: Telemetry
-    cachePool: CachePool
-    usageCacheManager: UsageCacheManager
-    componentNodes: IComponentNodes
+    appDataSource?: DataSource
+    telemetry?: Telemetry
+    cachePool?: CachePool
+    usageCacheManager?: UsageCacheManager
+    componentNodes?: IComponentNodes
 }
 
 export class UpsertQueue extends BaseQueue {
     private componentNodes: IComponentNodes
-    private telemetry: Telemetry
-    private cachePool: CachePool
-    private appDataSource: DataSource
-    private usageCacheManager: UsageCacheManager
+    private telemetry?: Telemetry
+    private cachePool?: CachePool
+    private appDataSource?: DataSource
+    private usageCacheManager?: UsageCacheManager
     private queueName: string
 
     constructor(name: string, connection: RedisOptions, options: UpsertQueueOptions) {

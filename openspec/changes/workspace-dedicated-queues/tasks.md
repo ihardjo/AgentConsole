@@ -1,67 +1,101 @@
-## 1. QueueManager — workspace-aware queue creation
+## 1. Database — `dedicatedQueue` column
 
-- [x] 1.1 Add `getOrCreateWorkspaceQueue(type: 'prediction' | 'upsert', workspaceId: string): BaseQueue` method to `QueueManager` — lazily creates and caches a per-workspace queue instance under key `<type>:<workspaceId>`
-- [x] 1.2 Use the naming convention `<QUEUE_NAME>-<type>-<workspaceId>` inside `getOrCreateWorkspaceQueue` — derive the full queue name from the existing `QUEUE_NAME` const and the passed `workspaceId`
-- [x] 1.3 Add `setupWorkspaceQueue(workspaceId, options)` method to `QueueManager` — creates and registers **only** the two workspace-scoped queues (prediction + upsert) without touching legacy global queues; called exclusively from the worker in `queue-dedicated-workspace` mode
-- [x] 1.4 Create a `QueueEventsProducer` for each new workspace prediction queue (required for abort event propagation)
-- [x] 1.5 Dynamically register the new workspace queue with BullBoard when a `serverAdapter` is available (add a `BullMQAdapter`)
-- [x] 1.6 Keep existing `getQueue('prediction' | 'upsert')` and `setupAllQueues()` intact for legacy fallback — do not break their signatures
+- [x] 1.1 Add `dedicatedQueue BOOLEAN NOT NULL DEFAULT FALSE` column to the `workspace` table via TypeORM migration files in `packages/server/src/database/custom-migrations/` (postgres, mysql, sqlite)
+- [x] 1.2 Add `@Column({ default: false }) dedicatedQueue: boolean` field to the `Workspace` entity (`packages/server/src/custom-rbac/entities/workspace.entity.ts`)
+- [x] 1.3 Ensure migrations are idempotent — postgres uses `ADD COLUMN IF NOT EXISTS`; mysql checks `table.findColumnByName()`; sqlite uses `ensureColumnExists()`; all three registered in their respective `index.ts` migration arrays
 
-## 2. Server-side job routing (producer changes)
+## 2. Backend API — workspace CRUD
 
-- [x] 2.1 In `packages/server/src/utils/buildChatflow.ts` — when `MODE=queue-dedicated-workspace` and `workspaceId` is present, call `queueManager.getOrCreateWorkspaceQueue('prediction', workspaceId)`; otherwise fall back to `getQueue('prediction')`
-- [x] 2.2 In `packages/server/src/services/documentstore/index.ts` — when `MODE=queue-dedicated-workspace` and `workspaceId` is present, call `queueManager.getOrCreateWorkspaceQueue('upsert', workspaceId)`; otherwise fall back to `getQueue('upsert')`
-- [x] 2.3 In `packages/server/src/services/nodes/index.ts` — apply the same MODE-guarded `getOrCreateWorkspaceQueue` pattern for the local `workspaceId`
+- [x] 2.1 In `WorkspaceManagementService.createWorkspace()`: `dedicatedQueue` is accepted as part of `Partial<Workspace>` and persisted via `saveWorkspace()` (default `false` when omitted)
+- [x] 2.2 In `WorkspaceManagementService.updateWorkspace()`: `dedicatedQueue` is mergeable via `queryRunner.manager.merge()`; when toggled, a `logger.warn` is emitted noting the change applies to new jobs only and in-flight jobs continue on the previous queue
+- [x] 2.3 In `WorkspaceManagementService.deleteWorkspace()`: `workspace.dedicatedQueue` is read before `commitTransaction()`; after commit, if `MODE=queue && workspace.dedicatedQueue && id`, `QueueManager.teardownWorkspaceQueue(id)` is called with `.catch(logger.warn)` — DB delete is never rolled back on Redis failure
+- [x] 2.4 In `WorkspaceManagementService.deleteWorkspaceById()`: no auto-teardown (runs inside caller's outer transaction); JSDoc documents that the caller is responsible for triggering `teardownWorkspaceQueue` post-commit
+- [x] 2.5 `dedicatedQueue` is returned in workspace API responses as part of the `Workspace` entity (entity shape is the response DTO)
 
-## 3. Worker — single-workspace consumer
+## 3. QueueManager — workspace-aware queue creation
 
-- [x] 3.1 In `packages/server/src/commands/worker.ts`, read `WORKER_WORKSPACE_ID` env variable (single workspace ID)
-- [x] 3.2 If `MODE=queue-dedicated-workspace` and `WORKER_WORKSPACE_ID` is set: call `queueManager.setupWorkspaceQueue(workspaceId, ...)` — creates only the two workspace-scoped queues; avoids wasteful legacy queue connections
-- [x] 3.3 If `MODE=queue` or `WORKER_WORKSPACE_ID` is absent: retain the existing legacy path using `setupAllQueues()` and the global prediction/upsert queues (backward-compatible fallback); log a warning if `MODE=queue-dedicated-workspace` but `WORKER_WORKSPACE_ID` is missing
-- [x] 3.4 Attach a `QueueEvents` `abort` listener for the workspace prediction queue
-- [x] 3.5 In `stopProcess()`, gracefully close the prediction BullMQ worker, the upsert BullMQ worker, **and** the `QueueEvents` listener (to prevent Redis connection leaks on shutdown)
-- [x] 3.6 Emit info-level log: `[Worker] Prediction Worker <workerId> serving workspace <workspaceId>` and equivalent for upsert
-- [x] 3.7 Listen for the BullMQ `Worker` `closing` event on the prediction and upsert workers; when fired, log `[Worker] Workspace <workspaceId> queue has been removed — shutting down worker` and call `stopProcess()` so the process exits cleanly when its queue is obliterated by the server
+- [x] 3.1 `getOrCreateWorkspaceQueue(type, workspaceId, options?)` lazily creates and caches per-workspace queue under key `<QUEUE_NAME>:<workspaceId>:<type>`
+- [x] 3.2 Queue name convention: `<QUEUE_NAME>-<workspaceId>-prediction` / `<QUEUE_NAME>-<workspaceId>-upsertion`
+- [x] 3.3 `setupWorkspaceQueue(workspaceId, options)` delegates to `getOrCreateWorkspaceQueue` twice and returns `{ predictionQueue, upsertQueue }`
+- [x] 3.4 `QueueEventsProducer` created for each new workspace prediction queue; stored in `workspaceQueueEventsProducers` map
+- [x] 3.5 New workspace queues incrementally registered with BullBoard via `bullBoardApi.addQueue()` (not full-map rebuild)
+- [x] 3.6 `getQueue()` and `setupAllQueues()` retained unchanged for shared-queue path
+- [x] 3.7 `teardownWorkspaceQueue(workspaceId)`: warns on active jobs, obliterates both queues, closes `QueueEvents`, deletes from caches, calls `bullBoardApi.replaceQueues()` to deregister from BullBoard
+- [x] 3.8 `getWorkspaceQueueEventsProducer(workspaceId)` throws if producer not found (no silent no-op)
 
-## 4. Configuration
+## 4. Server initialisation
 
-- [x] 4.1 In `packages/server/src/commands/base.ts`: add `WORKER_WORKSPACE_ID` flag alongside `QUEUE_NAME`, `WORKER_CONCURRENCY`, etc.; update the `MODE` flag documentation to list all valid values: `queue | queue-dedicated-workspace | main`
-- [x] 4.2 In `packages/server/src/Interface.ts`: add `QUEUE_DEDICATED_WORKSPACE = 'queue-dedicated-workspace'` to the `MODE` enum
-- [x] 4.3 Remove any references to `WORKSPACE_IDS` from `base.ts` and all other files (was never implemented; ensure it does not ship)
-- [ ] 4.4 Update `docker/worker/README.md`: document `WORKER_WORKSPACE_ID`, the `queue-dedicated-workspace` MODE, the 1-queue-per-worker model, how `QUEUE_NAME` and `WORKER_WORKSPACE_ID` compose to form queue names, and the manual provisioning runbook for new workspaces
-- [x] 4.5 In `docker/worker/.env.example`: update `MODE` comment to `#(queue | queue-dedicated-workspace | main)`; add `# WORKER_WORKSPACE_ID=` with a comment: `# Single workspace ID for this worker. Composes with QUEUE_NAME: <QUEUE_NAME>-prediction-<WORKER_WORKSPACE_ID>. Required when MODE=queue-dedicated-workspace`
-- [x] 4.6 In `docker/.env.example` and `packages/server/.env.example`: apply the same MODE comment update and `WORKER_WORKSPACE_ID` entry as task 4.5
+- [x] 4.1 `index.ts` `initDatabase()`: single `MODE=queue` block initialises `QueueManager`, `createBullBoard` (via `setupAllQueues(serverAdapter)`), and `RedisEventSubscriber`; no separate `else if` branch
+- [x] 4.2 BullBoard route guard in `index.ts`: `MODE=queue && ENABLE_BULLMQ_DASHBOARD === 'true' && !identityManager.isCloud()` — single `MODE` condition, no dual-mode check
 
-## 5. Testing
+## 5. Server-side job routing (producer changes)
 
-- [ ] 5.1 Unit test `QueueManager.getOrCreateWorkspaceQueue` — verify correct queue name, single instance returned on repeated calls, no registry publish, and fallback for missing `workspaceId`
-- [ ] 5.2 Unit test worker startup — assert exactly two BullMQ worker instances created when `MODE=queue-dedicated-workspace` and `WORKER_WORKSPACE_ID` is set; assert legacy two-worker path when `MODE=queue`
-- [ ] 5.3 Unit test worker shutdown — assert both prediction and upsert workers **and** the `QueueEvents` listener are all closed gracefully on SIGTERM (no dangling Redis connections)
-- [ ] 5.4 Unit test `QueueManager.teardownWorkspaceQueue` — verify: (a) obliterate called on both prediction and upsert queues for the workspace, (b) `QueueEvents` closed for both, (c) both entries removed from the `queues` Map cache, (d) no-op when workspace has no queues registered
-- [ ] 5.5 Unit test workspace deletion queue hook — assert `teardownWorkspaceQueue` is called after `commitTransaction` in `WorkspaceManagementService.deleteWorkspace()` when `MODE=queue-dedicated-workspace`; assert it is NOT called when `MODE=queue`
-- [ ] 5.6 Unit test worker `closing` event handler — assert worker calls `stopProcess()` and logs the expected message when the BullMQ `Worker` emits `closing` due to queue obliteration
+- [x] 5.1 `packages/server/src/queue/queueUtils.ts` (new file): `getWorkspaceQueue(type, workspaceOrId, queueManager, dataSource?)` as the single routing abstraction; `isDedicatedQueue(workspaceId, dataSource)` with 30s TTL cache; `invalidateDedicatedQueueCache(workspaceId)`
+- [x] 5.2 `buildChatflow.ts`: `getWorkspaceQueue('prediction', workspace, appServer.queueManager)` — entity path (zero DB)
+- [x] 5.3 `services/documentstore/index.ts`: all 5 upsert dispatch sites use `getWorkspaceQueue('upsert', workspaceId, appServer.queueManager, appServer.AppDataSource)` — string path with TTL cache
+- [x] 5.4 `services/nodes/index.ts`: `executeCustomFunction` uses `workspaceId ? getWorkspaceQueue(...) : appServer.queueManager.getQueue('prediction')` — conditional guard prevents empty-string lookup when `workspaceId` is undefined _(fixed during production review)_
+- [x] 5.5 `utils/upsertVector.ts`: `getWorkspaceQueue('upsert', workspace, appServer.queueManager)` — entity path (zero DB)
+- [x] 5.6 `services/agentflowv2-generator/index.ts`: uses `appServer.queueManager.getQueue('prediction')` directly — agentflow is not workspace-specific
+- [x] 5.7 `services/chat-messages/index.ts`: `abortChatMessage()` checks `isDedicatedQueue(workspaceId, appServer.AppDataSource)` and routes to `getWorkspaceQueueEventsProducer(workspaceId)` or `getPredictionQueueEventsProducer()` accordingly
 
-## 6. Workspace queue teardown
+## 6. Dead code removal — `QUEUE_DEDICATED_WORKSPACE` artefacts
 
-- [x] 6.1 Add `teardownWorkspaceQueue(workspaceId: string): Promise<void>` to `QueueManager` — steps: (1) check if prediction and upsert workspace queues exist in cache; if neither exists, return early; (2) for each queue that exists: log active job count as a warning if > 0, call `queue.obliterate({ force: true })`, close `queueEvents`, remove from `queues` Map; (3) remove corresponding BullBoard adapter registrations by calling `serverAdapter.setQueues(remainingAdapters)` with the workspace queues filtered out
-- [x] 6.2 In `WorkspaceManagementService.deleteWorkspace()`: after `queryRunner.commitTransaction()`, add the MODE-guarded teardown call — `if (MODE === QUEUE_DEDICATED_WORKSPACE) await QueueManager.getInstance().teardownWorkspaceQueue(id).catch(logger.error)` — wrapped in `.catch()` so a Redis failure never rolls back the successful DB deletion
-- [x] 6.3 In `WorkspaceManagementService.deleteWorkspaceById()`: apply the same post-commit teardown hook as 6.2 — note this method does not manage its own transaction (called within an outer `QueryRunner`), so the caller is responsible for ensuring teardown is triggered after the outer `commitTransaction()`; add a JSDoc comment documenting this responsibility
-- [x] 6.4 Add `closeWorkspaceQueues(workspaceId)` helper to `QueueManager` (internal, used by `teardownWorkspaceQueue`) — separates the close-connections step from obliterate for testability
-- [x] 6.5 Update `docker/worker/README.md` — add a section explaining that when a workspace is deleted in `queue-dedicated-workspace` mode, the corresponding worker process will receive a `closing` event and exit automatically; operators do not need to manually kill the worker container but should confirm the process has exited
+_All artefacts from the earlier `queue-dedicated-workspace` implementation have been removed._
 
-## 7. Runtime bug fixes — infrastructure guard extension
+- [x] 6.1 **`Interface.ts`** — `QUEUE_DEDICATED_WORKSPACE` deleted; `MODE` enum contains only `QUEUE = 'queue'` and `MAIN = 'main'`
+- [x] 6.2 **`commands/base.ts`** — `MODE` flag doc updated to `queue | main`; `WORKER_WORKSPACE_ID` flag retained with updated description
+- [x] 6.3 **`index.ts`** — All `QUEUE_DEDICATED_WORKSPACE` branches removed; single `MODE.QUEUE` block
+- [x] 6.4 **`CachePool.ts`** — `isQueueMode()` helper deleted; all sites inlined to `process.env.MODE === MODE.QUEUE`
+- [x] 6.5 **`UsageCacheManager.ts`** — `initialize()` guard simplified to `MODE.QUEUE` only
+- [x] 6.6 **`utils/rateLimit.ts`** — All four guards simplified to `MODE.QUEUE` only
+- [x] 6.7 **`controllers/internal-predictions/index.ts`** — `redisSubscriber.subscribe` guard simplified to `MODE.QUEUE`
+- [x] 6.8 **`controllers/predictions/index.ts`** — Same as 6.7
+- [x] 6.9 **`utils/buildChatflow.ts`** — `MODE.QUEUE_DEDICATED_WORKSPACE` branch removed; replaced by §5.2
+- [x] 6.10 **`services/documentstore/index.ts`** — All 5 `MODE.QUEUE_DEDICATED_WORKSPACE` branches removed; replaced by §5.3
+- [x] 6.11 **`services/nodes/index.ts`** — `MODE.QUEUE_DEDICATED_WORKSPACE` branch removed; replaced by §5.4
+- [x] 6.12 **`utils/upsertVector.ts`** — `MODE.QUEUE_DEDICATED_WORKSPACE` branch removed; replaced by §5.5
+- [x] 6.13 **`services/agentflowv2-generator/index.ts`** — `MODE.QUEUE_DEDICATED_WORKSPACE` branch removed; §5.6
+- [x] 6.14 **`services/chat-messages/index.ts`** — `MODE.QUEUE_DEDICATED_WORKSPACE` abort branch removed; replaced by §5.7
+- [x] 6.15 **`custom-rbac/services/workspace-management/index.ts`** — Teardown guard is `MODE.QUEUE && workspace.dedicatedQueue && id`
+- [x] 6.16 **Verification** — `grep -r "QUEUE_DEDICATED_WORKSPACE\|queue-dedicated-workspace" packages/server/src` returns zero matches ✓
 
-_Discovered during end-to-end testing. All guards that were scoped to `MODE.QUEUE` only had to be extended to also cover `MODE.QUEUE_DEDICATED_WORKSPACE`._
+## 7. Worker — dedicated vs. shared path within `MODE=queue`
 
-- [x] 7.1 **`index.ts` — `queueManager` initialisation**: add `else if (MODE.QUEUE_DEDICATED_WORKSPACE)` branch in `initDatabase()` that calls `QueueManager.getInstance()`, `initBullBoard()`, and creates `RedisEventSubscriber`; without this the server threw `Cannot read properties of undefined (reading 'getOrCreateWorkspaceQueue')` on first request
-- [x] 7.2 **`QueueManager.ts` — `initBullBoard()` method**: add `public initBullBoard(serverAdapter: ExpressAdapter): void` to initialise BullBoard in dedicated-workspace mode (in `queue` mode BullBoard is already set up via `setupAllQueues`); extend the BullBoard route guard in `index.ts` to include `QUEUE_DEDICATED_WORKSPACE`
-- [x] 7.3 **`QueueManager.ts` — `getWorkspaceQueueEventsProducer()` method**: add `public getWorkspaceQueueEventsProducer(workspaceId: string): QueueEventsProducer` that retrieves the per-workspace producer from `workspaceQueueEventsProducers` map; required by the abort path
-- [x] 7.4 **`controllers/internal-predictions/index.ts` — SSE subscribe guard**: extend `if (process.env.MODE === MODE.QUEUE)` to also match `MODE.QUEUE_DEDICATED_WORKSPACE` before calling `redisSubscriber.subscribe(chatId)`; without this no SSE events reached the browser in dedicated-workspace mode
-- [x] 7.5 **`controllers/predictions/index.ts` — SSE subscribe guard**: same fix as 7.4 for the external predictions controller
-- [x] 7.6 **`services/chat-messages/index.ts` — abort path**: add `QUEUE_DEDICATED_WORKSPACE` branch to `abortChatMessage(chatId, chatflowid, workspaceId?)` that calls `getWorkspaceQueueEventsProducer(workspaceId).publishEvent({ eventName: 'abort', id })`; without this abort fell through to the local `abortControllerPool.abort()` which has no effect when the job is running in a separate worker process
-- [x] 7.7 **`controllers/chat-messages/index.ts` — abort controller**: pass `req.user?.activeWorkspaceId` as the third argument to `abortChatMessage` so the service can identify the correct workspace queue events producer
-- [x] 7.8 **`utils/upsertVector.ts` — upsert queue routing**: add `QUEUE_DEDICATED_WORKSPACE` branch that calls `getOrCreateWorkspaceQueue('upsert', workspaceId)` (workspaceId is derived from the chatflow's workspace record); without this upsert jobs were never dispatched in dedicated-workspace mode
-- [x] 7.9 **`services/agentflowv2-generator/index.ts` — agentflow generation queue routing**: add `QUEUE_DEDICATED_WORKSPACE` branch; generation is not workspace-specific so it routes to the shared `prediction` queue (same queue as `MODE.QUEUE`); without this branch the generator ran inline instead of via the worker
-- [x] 7.10 **`CachePool.ts` — Redis-backed caching**: introduce `isQueueMode()` helper (`MODE.QUEUE || MODE.QUEUE_DEDICATED_WORKSPACE`) and apply it to all 11 guards; without this SSO token, LLM, and embedding caches used in-memory maps instead of Redis, causing cache misses across server/worker process boundary
-- [x] 7.11 **`UsageCacheManager.ts` — Redis-backed usage tracking**: extend `initialize()` guard to `MODE.QUEUE || MODE.QUEUE_DEDICATED_WORKSPACE`; without this usage counters were not shared across processes
-- [x] 7.12 **`utils/rateLimit.ts` — Redis-backed rate limiting and cross-process sync**: extend four guards (constructor Redis init, `addRateLimiter` RedisStore, `updateRateLimiter` cross-process publish, `initializeRateLimiters` QueueEvents listener) to include `MODE.QUEUE_DEDICATED_WORKSPACE`; without this rate limit updates made on the server were not propagated to or enforced by worker processes
+- [x] 7.1 `commands/worker.ts`: dedicated path when `MODE=queue && WORKER_WORKSPACE_ID` is set (calls `setupWorkspaceQueue`); shared path when `WORKER_WORKSPACE_ID` is absent (calls `setupAllQueues`); `isDedicatedMode` and `workspaceId` are `private readonly` class fields
+- [x] 7.2 `QueueEvents` `abort` listener attached for the workspace prediction queue in dedicated path
+- [x] 7.3 `stopProcess()` closes prediction worker, upsert worker, and `QueueEvents` listener; uses class fields (no re-derivation)
+- [x] 7.4 Info-level log emitted per worker: `[Worker] Prediction Worker <workerId> serving workspace <workspaceId>`
+- [x] 7.5 `predictionWorker.on('closing')` and `upsertionWorker.on('closing')` both registered; log and call `stopProcess()`
+
+## 8. Frontend — workspace form toggle
+
+- [x] 8.1 "Enable dedicated worker queue" `Switch` toggle added to workspace create form (`AddEditWorkspaceDialog.jsx`)
+- [x] 8.2 Same toggle present on workspace edit form; state initialised from `dialogProps.data.dedicatedQueue ?? false`
+- [x] 8.3 `dedicatedQueue` state wired into both `addNewWorkspace` and `saveWorkspace` API payloads
+- [x] 8.4 `index.jsx` workspace table gains a **"Worker Queue" column** (positioned between Users and Last Updated) — rows with `dedicatedQueue=true` render `<Chip label='Dedicated' size='small' color='primary' variant='outlined' />`; rows with `dedicatedQueue=false` render `<Typography variant='body2' color='text.secondary'>Shared</Typography>`; both skeleton loading rows gain a matching sixth `<StyledTableCell>` to preserve column alignment; the previous inline `<Chip label='Dedicated Queue' />` inside the Name cell is removed
+- [x] 8.5 `Tooltip` wraps the `Switch` with: _"Route all jobs for this workspace to a dedicated BullMQ queue. Requires MODE=queue and a worker started with WORKER_WORKSPACE_ID set to this workspace ID."_
+
+## 9. Configuration
+
+- [x] 9.1 `packages/server/.env.example`: `MODE` comment updated to `# MODE=queue #(queue | main)`; `WORKER_WORKSPACE_ID` comment updated with queue-name composition format and `dedicatedQueue=true` requirement
+- [x] 9.2 `docker/worker/.env.example`: same `MODE` comment update; `WORKER_WORKSPACE_ID` description updated
+- [x] 9.3 `docker/worker/README.md`: rewritten — documents UI toggle, `MODE=queue` + `WORKER_WORKSPACE_ID` worker setup, 1-worker-per-workspace model, queue name composition, and provisioning runbook
+
+## 10. Testing
+
+- [x] 10.1 Unit test `QueueManager.getOrCreateWorkspaceQueue` — verify correct queue name, single instance returned on repeated calls, BullBoard registration
+- [x] 10.2 Unit test `getWorkspaceQueue` helper — assert returns `getOrCreateWorkspaceQueue` when `dedicatedQueue=true`, returns `getQueue` when `dedicatedQueue=false`; assert throws when `dataSource` absent on string path
+- [x] 10.3 Unit test worker startup — assert dedicated path (two workspace-scoped workers) when `WORKER_WORKSPACE_ID` is set; assert shared path when absent
+- [x] 10.4 Unit test worker shutdown — assert both workers and `QueueEvents` listener closed on SIGTERM / `closing` event
+- [x] 10.5 Unit test `QueueManager.teardownWorkspaceQueue` — verify obliterate, close, cache removal, BullBoard deregistration; no-op when workspace has no queues
+- [x] 10.6 Unit test `deleteWorkspace` teardown hook — assert `teardownWorkspaceQueue` called when `MODE=queue && dedicatedQueue=true`; assert not called when `dedicatedQueue=false`
+- [x] 10.7 Unit test `abortChatMessage` — assert workspace-specific producer used when `dedicatedQueue=true`; assert shared producer used when `dedicatedQueue=false`
+
+## 11. Performance optimisations
+
+- [x] 11.1 `queueUtils.ts`: `isDedicatedQueue(workspaceId, dataSource)` — module-level `Map<string, { value: boolean; expiresAt: number }>` with 30s TTL; `invalidateDedicatedQueueCache(workspaceId)` for explicit invalidation
+- [x] 11.2 `queueUtils.ts`: `getWorkspaceQueue(type, workspaceOrId, queueManager, dataSource?)` — accepts full `Workspace` entity (zero DB) or `workspaceId` string (TTL cache); throws explicit error when `dataSource` absent on string path (no silent fallback)
+- [x] 11.3 `WorkspaceManagementService.updateWorkspace()`: calls `invalidateDedicatedQueueCache(updateWorkspace.id)` after `commitTransaction()` — immediate propagation, no 30s wait
+- [x] 11.4 Entity path used at `buildChatflow.ts` and `upsertVector.ts` (entity already in scope); string path used at `documentstore/index.ts`, `nodes/index.ts`, and `chat-messages/index.ts`
+- [x] 11.5 `QueueManager` direct imports confined to `worker.ts`, `index.ts`, `workspace-management/index.ts` (teardown only), and `queueUtils.ts`; no routing-purpose imports in controllers or services
+- [x] 11.6 `// TODO: shared IORedis connection pool` comment placed in `QueueManager.getOrCreateWorkspaceQueue()` referencing design.md Decision 10

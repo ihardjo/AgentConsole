@@ -34,7 +34,7 @@ export class UsageCacheManager {
     }
 
     private async initialize(): Promise<void> {
-        if (process.env.MODE === MODE.QUEUE || process.env.MODE === MODE.QUEUE_DEDICATED_WORKSPACE) {
+        if (process.env.MODE === MODE.QUEUE) {
             let redisConfig: string | Record<string, any>
             if (process.env.REDIS_URL) {
                 redisConfig = {

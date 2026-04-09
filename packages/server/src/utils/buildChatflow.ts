@@ -72,6 +72,7 @@ import { OMIT_QUEUE_JOB_DATA } from './constants'
 import { executeAgentFlow } from './buildAgentflow'
 import { Workspace } from '../custom-rbac/entities/workspace.entity'
 import { Organization } from '../custom-rbac/entities/organization.entity'
+import { getWorkspaceQueue } from '../queue/queueUtils'
 
 const shouldAutoPlayTTS = (textToSpeechConfig: string | undefined | null): boolean => {
     if (!textToSpeechConfig) return false
@@ -1078,22 +1079,8 @@ export const utilBuildChatflow = async (req: Request, isInternal: boolean = fals
             productId
         }
 
-        if (process.env.MODE === MODE.QUEUE_DEDICATED_WORKSPACE && workspaceId) {
-            const predictionQueue = appServer.queueManager.getOrCreateWorkspaceQueue('prediction', workspaceId)
-            const job = await predictionQueue.addJob(omit(executeData, OMIT_QUEUE_JOB_DATA))
-            logger.debug(`[server]: [${orgId}/${chatflow.id}/${chatId}]: Job added to workspace queue: ${job.id}`)
-
-            const queueEvents = predictionQueue.getQueueEvents()
-            const result = await job.waitUntilFinished(queueEvents)
-            appServer.abortControllerPool.remove(abortControllerId)
-            if (!result) {
-                throw new Error('Job execution failed')
-            }
-            await updatePredictionsUsage(orgId, subscriptionId, workspaceId, appServer.usageCacheManager)
-            incrementSuccessMetricCounter(appServer.metricsProvider, isInternal, isAgentFlow)
-            return result
-        } else if (process.env.MODE === MODE.QUEUE) {
-            const predictionQueue = appServer.queueManager.getQueue('prediction')
+        if (process.env.MODE === MODE.QUEUE) {
+            const predictionQueue = await getWorkspaceQueue('prediction', workspace, appServer.queueManager)
             const job = await predictionQueue.addJob(omit(executeData, OMIT_QUEUE_JOB_DATA))
             logger.debug(`[server]: [${orgId}/${chatflow.id}/${chatId}]: Job added to queue: ${job.id}`)
 

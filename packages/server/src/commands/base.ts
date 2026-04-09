@@ -78,7 +78,7 @@ export abstract class BaseCommand extends Command {
         SECRETKEY_AWS_REGION: Flags.string(),
         SECRETKEY_AWS_NAME: Flags.string(),
 
-        // Queue — MODE values: queue | queue-dedicated-workspace | main
+        // Queue — MODE values: queue | main
         MODE: Flags.string(),
         WORKER_CONCURRENCY: Flags.string(),
         QUEUE_NAME: Flags.string(),

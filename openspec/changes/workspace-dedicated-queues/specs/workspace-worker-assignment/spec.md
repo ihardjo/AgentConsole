@@ -1,23 +1,24 @@
 ## ADDED Requirements
 
-### Requirement: Each worker process SHALL be dedicated to exactly one workspace queue when MODE is `queue-dedicated-workspace`
+### Requirement: Each worker process SHALL serve either the shared queue or one workspace-dedicated queue, determined by `WORKER_WORKSPACE_ID` within `MODE=queue`
 
-A worker process SHALL serve exactly one workspace's prediction queue and one workspace's upsert queue when `MODE=queue-dedicated-workspace`. The assigned workspace is determined by the `WORKER_WORKSPACE_ID` environment variable.
+A worker process operates in one of two paths within a single `MODE=queue` deployment. The path is determined exclusively by the presence of the `WORKER_WORKSPACE_ID` environment variable — not by a distinct MODE value. There is no separate `queue-dedicated-workspace` MODE.
 
-#### Scenario: MODE is `queue-dedicated-workspace` and WORKER_WORKSPACE_ID is set
+#### Scenario: MODE is `queue` and WORKER_WORKSPACE_ID is set
 
-- **WHEN** a worker starts with `MODE=queue-dedicated-workspace` and `WORKER_WORKSPACE_ID` is set to a non-empty workspace ID (e.g., `ws-abc123`)
-- **THEN** the worker SHALL call `setupWorkspaceQueue(workspaceId)` and create exactly one BullMQ `Worker` for `<QUEUE_NAME>-prediction-<workspaceId>` and one for `<QUEUE_NAME>-upsertion-<workspaceId>`
+- **WHEN** a worker starts with `MODE=queue` and `WORKER_WORKSPACE_ID` is set to a non-empty workspace ID (e.g., `ws-abc123`)
+- **THEN** the worker SHALL call `setupWorkspaceQueue(workspaceId)` and create exactly one BullMQ `Worker` for `<QUEUE_NAME>-<workspaceId>-prediction` and one for `<QUEUE_NAME>-<workspaceId>-upsertion`
 
-#### Scenario: MODE is `queue` (legacy fallback)
+#### Scenario: MODE is `queue` and WORKER_WORKSPACE_ID is not set
 
-- **WHEN** a worker starts with `MODE=queue` (or MODE is absent/unrecognised)
-- **THEN** the worker SHALL fall back to calling `setupAllQueues()` and creating workers for the legacy global `prediction` and `upsert` queues, preserving all existing shared-queue behaviour unchanged
+- **WHEN** a worker starts with `MODE=queue` and `WORKER_WORKSPACE_ID` is absent or empty
+- **THEN** the worker SHALL call `setupAllQueues()` and create workers for the global shared `prediction` and `upsert` queues, preserving all existing shared-queue behaviour unchanged
 
-#### Scenario: MODE is `queue-dedicated-workspace` but WORKER_WORKSPACE_ID is not set
+#### Scenario: WORKER_WORKSPACE_ID is set — no database check of `dedicatedQueue`
 
-- **WHEN** a worker starts with `MODE=queue-dedicated-workspace` and `WORKER_WORKSPACE_ID` is absent or empty
-- **THEN** the worker SHALL log a warning and fall back to the legacy shared-queue path to prevent a broken worker process
+- **WHEN** a worker starts with `MODE=queue` and `WORKER_WORKSPACE_ID` is set
+- **THEN** the worker SHALL proceed with `setupWorkspaceQueue(workspaceId)` regardless of the workspace's `dedicatedQueue` database value
+- **AND** the worker does NOT perform a database lookup to verify `dedicatedQueue=true`; it is the operator's responsibility to ensure the workspace toggle is enabled before starting a dedicated worker
 
 ### Requirement: Abort events SHALL be propagated for the assigned workspace prediction queue
 
@@ -39,25 +40,31 @@ When a worker process receives a shutdown signal, it SHALL close its prediction 
 
 ### Requirement: Workers SHALL log their assigned workspace at startup
 
-When a worker process starts in workspace mode, the system SHALL emit an info-level log identifying the workspace and the worker IDs.
+When a worker process starts in workspace-dedicated path, the system SHALL emit an info-level log identifying the workspace and the worker IDs.
 
 #### Scenario: Worker starts with WORKER_WORKSPACE_ID configured
 
 - **WHEN** the worker process initialises BullMQ workers for its assigned workspace
-- **THEN** the system SHALL emit an info-level log entry per worker in the format `[Worker] Prediction Worker <workerId> serving workspace <workspaceId>`
+- **THEN** the system SHALL emit a log: `[Worker] MODE=queue + WORKER_WORKSPACE_ID — workspace: <workspaceId>`
+- **AND** per-worker logs SHALL be emitted in the format `Prediction Worker <workerId> created for workspace <workspaceId>` and `Upsertion Worker <workerId> created for workspace <workspaceId>`
 
 ### Requirement: Workers SHALL exit gracefully when their assigned workspace queue is obliterated
 
 When a workspace is deleted and its BullMQ queues are obliterated on the server side, the worker process assigned to that workspace SHALL detect the queue removal and shut itself down cleanly.
 
-#### Scenario: Worker detects its queue has been obliterated
+#### Scenario: Worker detects its prediction queue is closing
 
-- **WHEN** the BullMQ `Worker` instance emits a `closing` or `closed` event as a result of the server calling `queue.obliterate()` on the workspace's queue
-- **THEN** the worker process SHALL log an info-level message: `[Worker] Workspace <workspaceId> queue has been removed — shutting down worker`
-- **AND** the worker SHALL call `stopProcess()` to close all BullMQ Worker instances and the `QueueEvents` listener before the process exits
+- **WHEN** the BullMQ `Worker` instance emits a `closing` event (as a result of the server calling `queue.obliterate()` on the workspace's queue)
+- **THEN** the worker process SHALL log: `[Worker] Prediction worker for workspace <workspaceId> is closing — initiating graceful shutdown`
+- **AND** the worker SHALL call `stopProcess()` to close both BullMQ Worker instances and the `QueueEvents` listener before the process exits
+
+#### Scenario: Worker detects its upsertion queue is closing
+
+- **WHEN** the BullMQ `Worker` instance for the upsert queue emits a `closing` event
+- **THEN** the worker process SHALL log: `[Worker] Upsertion worker for workspace <workspaceId> is closing — initiating graceful shutdown`
+- **AND** the worker SHALL call `stopProcess()`
 
 #### Scenario: Worker cannot connect to its assigned queue after obliteration
 
 - **WHEN** a worker process starts and `WORKER_WORKSPACE_ID` is set but the corresponding queue no longer exists in Redis (was obliterated while the worker was offline)
-- **THEN** the worker SHALL log a warning: `[Worker] Queue for workspace <workspaceId> not found in Redis — no pending jobs to process`
-- **AND** the worker SHALL continue running normally (the queue will be re-created in Redis the next time a job is enqueued for that workspace)
+- **THEN** the worker SHALL continue running normally — the queue will be re-created in Redis the next time a job is enqueued for that workspace by the server

@@ -14,12 +14,12 @@ import { databaseEntities } from '../utils'
 import { executeCustomNodeFunction } from '../utils/executeCustomNodeFunction'
 
 interface PredictionQueueOptions {
-    appDataSource: DataSource
-    telemetry: Telemetry
-    cachePool: CachePool
-    componentNodes: IComponentNodes
-    abortControllerPool: AbortControllerPool
-    usageCacheManager: UsageCacheManager
+    appDataSource?: DataSource
+    telemetry?: Telemetry
+    cachePool?: CachePool
+    componentNodes?: IComponentNodes
+    abortControllerPool?: AbortControllerPool
+    usageCacheManager?: UsageCacheManager
 }
 
 interface IGenerateAgentflowv2Params extends IExecuteFlowParams {
@@ -33,11 +33,11 @@ interface IGenerateAgentflowv2Params extends IExecuteFlowParams {
 
 export class PredictionQueue extends BaseQueue {
     private componentNodes: IComponentNodes
-    private telemetry: Telemetry
-    private cachePool: CachePool
-    private appDataSource: DataSource
-    private abortControllerPool: AbortControllerPool
-    private usageCacheManager: UsageCacheManager
+    private telemetry?: Telemetry
+    private cachePool?: CachePool
+    private appDataSource?: DataSource
+    private abortControllerPool?: AbortControllerPool
+    private usageCacheManager?: UsageCacheManager
     private redisPublisher: RedisEventPublisher
     private queueName: string
 
@@ -85,7 +85,7 @@ export class PredictionQueue extends BaseQueue {
             const executeCustomFunctionData = data as any
             logger.info(`[${executeCustomFunctionData.orgId}]: Executing Custom Function...`)
             return await executeCustomNodeFunction({
-                appDataSource: this.appDataSource,
+                appDataSource: this.appDataSource!,
                 componentNodes: this.componentNodes,
                 data: executeCustomFunctionData.data,
                 workspaceId: executeCustomFunctionData.workspaceId,

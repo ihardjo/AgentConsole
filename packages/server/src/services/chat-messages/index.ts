@@ -6,6 +6,7 @@ import { ChatMessageFeedback } from '../../database/entities/ChatMessageFeedback
 import { InternalFlowiseError } from '../../errors/internalFlowiseError'
 import { getErrorMessage } from '../../errors/utils'
 import { ChatMessageRatingType, ChatType, IChatMessage, MODE } from '../../Interface'
+import { isDedicatedQueue } from '../../queue/queueUtils'
 import { UsageCacheManager } from '../../UsageCacheManager'
 import { utilAddChatMessage } from '../../utils/addChatMesage'
 import { utilGetChatMessage } from '../../utils/getChatMessage'
@@ -192,16 +193,21 @@ const abortChatMessage = async (chatId: string, chatflowid: string, workspaceId?
         const appServer = getRunningExpressApp()
         const id = `${chatflowid}_${chatId}`
 
-        if (process.env.MODE === MODE.QUEUE_DEDICATED_WORKSPACE && workspaceId) {
-            await appServer.queueManager.getWorkspaceQueueEventsProducer(workspaceId).publishEvent({
-                eventName: 'abort',
-                id
-            })
-        } else if (process.env.MODE === MODE.QUEUE) {
-            await appServer.queueManager.getPredictionQueueEventsProducer().publishEvent({
-                eventName: 'abort',
-                id
-            })
+        if (process.env.MODE === MODE.QUEUE) {
+            const dedicated = workspaceId
+                ? await isDedicatedQueue(workspaceId, appServer.AppDataSource)
+                : false
+            if (dedicated && workspaceId) {
+                await appServer.queueManager.getWorkspaceQueueEventsProducer(workspaceId).publishEvent({
+                    eventName: 'abort',
+                    id
+                })
+            } else {
+                await appServer.queueManager.getPredictionQueueEventsProducer().publishEvent({
+                    eventName: 'abort',
+                    id
+                })
+            }
         } else {
             appServer.abortControllerPool.abort(id)
         }

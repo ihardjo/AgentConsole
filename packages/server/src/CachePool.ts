@@ -1,9 +1,6 @@
 import { IActiveCache, MODE } from './Interface'
 import Redis from 'ioredis'
 
-const isQueueMode = () =>
-    process.env.MODE === MODE.QUEUE || process.env.MODE === MODE.QUEUE_DEDICATED_WORKSPACE
-
 /**
  * This pool is to keep track of in-memory cache used for LLM and Embeddings
  */
@@ -15,7 +12,7 @@ export class CachePool {
     ssoTokenCache: { [key: string]: any } = {}
 
     constructor() {
-        if (isQueueMode()) {
+        if (process.env.MODE === MODE.QUEUE) {
             if (process.env.REDIS_URL) {
                 this.redisClient = new Redis(process.env.REDIS_URL, {
                     keepAlive:
@@ -52,7 +49,7 @@ export class CachePool {
      * @param {any} value
      */
     async addSSOTokenCache(ssoToken: string, value: any) {
-        if (isQueueMode()) {
+        if (process.env.MODE === MODE.QUEUE) {
             if (this.redisClient) {
                 const serializedValue = JSON.stringify(value)
                 await this.redisClient.set(`ssoTokenCache:${ssoToken}`, serializedValue, 'EX', 120)
@@ -63,7 +60,7 @@ export class CachePool {
     }
 
     async getSSOTokenCache(ssoToken: string): Promise<any | undefined> {
-        if (isQueueMode()) {
+        if (process.env.MODE === MODE.QUEUE) {
             if (this.redisClient) {
                 const serializedValue = await this.redisClient.get(`ssoTokenCache:${ssoToken}`)
                 if (serializedValue) {
@@ -77,7 +74,7 @@ export class CachePool {
     }
 
     async deleteSSOTokenCache(ssoToken: string) {
-        if (isQueueMode()) {
+        if (process.env.MODE === MODE.QUEUE) {
             if (this.redisClient) {
                 await this.redisClient.del(`ssoTokenCache:${ssoToken}`)
             }
@@ -92,7 +89,7 @@ export class CachePool {
      * @param {Map<any, any>} value
      */
     async addLLMCache(chatflowid: string, value: Map<any, any>) {
-        if (isQueueMode()) {
+        if (process.env.MODE === MODE.QUEUE) {
             if (this.redisClient) {
                 const serializedValue = JSON.stringify(Array.from(value.entries()))
                 await this.redisClient.set(`llmCache:${chatflowid}`, serializedValue)
@@ -108,7 +105,7 @@ export class CachePool {
      * @param {Map<any, any>} value
      */
     async addEmbeddingCache(chatflowid: string, value: Map<any, any>) {
-        if (isQueueMode()) {
+        if (process.env.MODE === MODE.QUEUE) {
             if (this.redisClient) {
                 const serializedValue = JSON.stringify(Array.from(value.entries()))
                 await this.redisClient.set(`embeddingCache:${chatflowid}`, serializedValue)
@@ -125,7 +122,7 @@ export class CachePool {
      */
     async addMCPCache(cacheKey: string, value: any) {
         // Only add to cache for non-queue mode, because we are storing the toolkit instances in memory, and we can't store them in redis
-        if (!isQueueMode()) {
+        if (process.env.MODE !== MODE.QUEUE) {
             this.activeMCPCache[`mcpCache:${cacheKey}`] = value
         }
     }
@@ -135,7 +132,7 @@ export class CachePool {
      * @param {string} cacheKey
      */
     async getMCPCache(cacheKey: string): Promise<any | undefined> {
-        if (!isQueueMode()) {
+        if (process.env.MODE !== MODE.QUEUE) {
             return this.activeMCPCache[`mcpCache:${cacheKey}`]
         }
         return undefined
@@ -146,7 +143,7 @@ export class CachePool {
      * @param {string} chatflowid
      */
     async getLLMCache(chatflowid: string): Promise<Map<any, any> | undefined> {
-        if (isQueueMode()) {
+        if (process.env.MODE === MODE.QUEUE) {
             if (this.redisClient) {
                 const serializedValue = await this.redisClient.get(`llmCache:${chatflowid}`)
                 if (serializedValue) {
@@ -164,7 +161,7 @@ export class CachePool {
      * @param {string} chatflowid
      */
     async getEmbeddingCache(chatflowid: string): Promise<Map<any, any> | undefined> {
-        if (isQueueMode()) {
+        if (process.env.MODE === MODE.QUEUE) {
             if (this.redisClient) {
                 const serializedValue = await this.redisClient.get(`embeddingCache:${chatflowid}`)
                 if (serializedValue) {

@@ -4,7 +4,19 @@ import { useState, useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 
 // Material
-import { Button, Dialog, DialogActions, DialogContent, DialogTitle, Box, Typography, OutlinedInput } from '@mui/material'
+import {
+    Button,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    Box,
+    Typography,
+    OutlinedInput,
+    FormControlLabel,
+    Switch,
+    Tooltip
+} from '@mui/material'
 
 // Project imports
 import { StyledButton } from '@/ui-component/button/StyledButton'
@@ -45,6 +57,7 @@ const AddEditWorkspaceDialog = ({ show, dialogProps, onCancel, onConfirm }) => {
 
     const [workspaceName, setWorkspaceName] = useState('')
     const [workspaceDescription, setWorkspaceDescription] = useState('')
+    const [dedicatedQueue, setDedicatedQueue] = useState(false)
     const [dialogType, setDialogType] = useState('ADD')
     const [workspace, setWorkspace] = useState({})
     const currentUser = useSelector((state) => state.auth.user)
@@ -53,11 +66,13 @@ const AddEditWorkspaceDialog = ({ show, dialogProps, onCancel, onConfirm }) => {
         if (dialogProps.type === 'EDIT' && dialogProps.data) {
             setWorkspaceName(dialogProps.data.name)
             setWorkspaceDescription(dialogProps.data.description)
+            setDedicatedQueue(dialogProps.data.dedicatedQueue ?? false)
             setDialogType('EDIT')
             setWorkspace(dialogProps.data)
         } else if (dialogProps.type === 'ADD') {
             setWorkspaceName('')
             setWorkspaceDescription('')
+            setDedicatedQueue(false)
             setDialogType('ADD')
             setWorkspace({})
         }
@@ -65,6 +80,7 @@ const AddEditWorkspaceDialog = ({ show, dialogProps, onCancel, onConfirm }) => {
         return () => {
             setWorkspaceName('')
             setWorkspaceDescription('')
+            setDedicatedQueue(false)
             setDialogType('ADD')
             setWorkspace({})
         }
@@ -97,6 +113,7 @@ const AddEditWorkspaceDialog = ({ show, dialogProps, onCancel, onConfirm }) => {
             const obj = {
                 name: workspaceName,
                 description: workspaceDescription,
+                dedicatedQueue,
                 createdBy: currentUser.id,
                 organizationId: currentUser.activeOrganizationId,
                 existingWorkspaceId: currentUser.activeWorkspaceId // this is used to inherit the current role
@@ -143,6 +160,7 @@ const AddEditWorkspaceDialog = ({ show, dialogProps, onCancel, onConfirm }) => {
                 id: workspace.id,
                 name: workspaceName,
                 description: workspaceDescription,
+                dedicatedQueue,
                 updatedBy: currentUser.id
             }
 
@@ -232,6 +250,24 @@ const AddEditWorkspaceDialog = ({ show, dialogProps, onCancel, onConfirm }) => {
                         onChange={(e) => setWorkspaceDescription(e.target.value)}
                         value={workspaceDescription ?? ''}
                     />
+                </Box>
+                <Box sx={{ px: 2, pb: 2 }}>
+                    <Tooltip title='When enabled, all AI tasks for this workspace are processed through its own isolated queue, keeping them separate from other workspaces.'>
+                        <FormControlLabel
+                            control={
+                                <Switch
+                                    checked={dedicatedQueue}
+                                    onChange={(e) => setDedicatedQueue(e.target.checked)}
+                                    color='primary'
+                                />
+                            }
+                            label={
+                                <Typography variant='body2'>
+                                    Enable Dedicated Queue
+                                </Typography>
+                            }
+                        />
+                    </Tooltip>
                 </Box>
             </DialogContent>
             <DialogActions>

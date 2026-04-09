@@ -5,6 +5,7 @@ import { MakeVersionStandalone1760000000004 } from './1760000000004-MakeVersionS
 import { RemoveVersionForeignKey1760000000005 } from './1760000000005-RemoveVersionForeignKey'
 import { AddVersionConfigColumns1760000000006 } from './1760000000006-AddVersionConfigColumns'
 import { AddWorkspaceIdToVersion1760000000007 } from './1760000000007-AddWorkspaceIdToVersion'
+import { AddDedicatedQueueToWorkspace1760000000008 } from './1760000000008-AddDedicatedQueueToWorkspace'
 
 export const sqliteCustomMigrations = [
     AddPlatformAssetEntity1760000000001,
@@ -13,5 +14,6 @@ export const sqliteCustomMigrations = [
     MakeVersionStandalone1760000000004,
     RemoveVersionForeignKey1760000000005,
     AddVersionConfigColumns1760000000006,
-    AddWorkspaceIdToVersion1760000000007
+    AddWorkspaceIdToVersion1760000000007,
+    AddDedicatedQueueToWorkspace1760000000008
 ]

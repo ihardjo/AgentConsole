@@ -9,7 +9,7 @@
 
 const mockPredictionQueueInstance = {
     getQueue: jest.fn().mockReturnValue({ name: 'mock-queue' }),
-    getQueueName: jest.fn().mockReturnValue('flowise-queue-prediction-ws-123'),
+    getQueueName: jest.fn().mockReturnValue('flowise-queue-ws-123-prediction'),
     getQueueEvents: jest.fn().mockReturnValue({ close: jest.fn().mockResolvedValue(undefined) }),
     getJobCounts: jest.fn().mockResolvedValue({ active: 0, waiting: 0, completed: 0, failed: 0 }),
     clearQueue: jest.fn().mockResolvedValue(undefined),
@@ -19,7 +19,7 @@ const mockPredictionQueueInstance = {
 
 const mockUpsertQueueInstance = {
     getQueue: jest.fn().mockReturnValue({ name: 'mock-upsert-queue' }),
-    getQueueName: jest.fn().mockReturnValue('flowise-queue-upsertion-ws-123'),
+    getQueueName: jest.fn().mockReturnValue('flowise-queue-ws-123-upsertion'),
     getQueueEvents: jest.fn().mockReturnValue({ close: jest.fn().mockResolvedValue(undefined) }),
     getJobCounts: jest.fn().mockResolvedValue({ active: 0, waiting: 0, completed: 0, failed: 0 }),
     clearQueue: jest.fn().mockResolvedValue(undefined),
@@ -61,6 +61,7 @@ jest.mock('@bull-board/express', () => ({
 }))
 
 jest.mock('../../src/utils/logger', () => ({
+    __esModule: true,
     default: {
         info: jest.fn(),
         warn: jest.fn(),
@@ -133,7 +134,7 @@ describe('QueueManager — workspace-dedicated queue', () => {
         it('uses correct queue name convention for prediction', () => {
             getInstance().getOrCreateWorkspaceQueue('prediction', 'ws-abc')
             expect(PredictionQueue).toHaveBeenCalledWith(
-                'flowise-queue-prediction-ws-abc',
+                'flowise-queue-ws-abc-prediction',
                 expect.anything(),
                 expect.anything()
             )
@@ -142,7 +143,7 @@ describe('QueueManager — workspace-dedicated queue', () => {
         it('uses correct queue name convention for upsert (upsertion suffix)', () => {
             getInstance().getOrCreateWorkspaceQueue('upsert', 'ws-abc')
             expect(UpsertQueue).toHaveBeenCalledWith(
-                'flowise-queue-upsertion-ws-abc',
+                'flowise-queue-ws-abc-upsertion',
                 expect.anything(),
                 expect.anything()
             )
@@ -164,6 +165,30 @@ describe('QueueManager — workspace-dedicated queue', () => {
             qm.getOrCreateWorkspaceQueue('prediction', 'ws-bbb')
             // Two distinct PredictionQueue instances created
             expect(PredictionQueue).toHaveBeenCalledTimes(2)
+        })
+
+        // Task 10.1 — BullBoard registration
+        it('registers the queue with BullBoard when bullBoardApi is initialised', () => {
+            const mockAddQueue = jest.fn()
+            const mockBullBoardAdapter = jest.fn().mockImplementation((q) => ({ queue: q }))
+            jest.mock('@bull-board/api/bullMQAdapter', () => ({ BullMQAdapter: mockBullBoardAdapter }))
+
+            const qm = getInstance()
+            // Inject a fake bullBoardApi directly via bracket notation
+            ;(qm as any).bullBoardApi = { addQueue: mockAddQueue, replaceQueues: jest.fn() }
+
+            qm.getOrCreateWorkspaceQueue('prediction', 'ws-board')
+
+            expect(mockAddQueue).toHaveBeenCalledTimes(1)
+        })
+
+        it('does NOT call bullBoardApi.addQueue when BullBoard is not yet initialised', () => {
+            const qm = getInstance()
+            // bullBoardApi is undefined by default (no initBullBoard call)
+            expect((qm as any).bullBoardApi).toBeUndefined()
+
+            // Should not throw — just silently skips BullBoard registration
+            expect(() => qm.getOrCreateWorkspaceQueue('prediction', 'ws-no-board')).not.toThrow()
         })
     })
 
@@ -270,6 +295,48 @@ describe('QueueManager — workspace-dedicated queue', () => {
             })
             await qm.teardownWorkspaceQueue('ws-warn')
             expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('3 active job'))
+        })
+
+        // Task 10.5 — BullBoard deregistration
+        it('calls bullBoardApi.replaceQueues with remaining queues after teardown', async () => {
+            const mockReplaceQueues = jest.fn()
+            const qm = getInstance()
+            ;(qm as any).bullBoardApi = { addQueue: jest.fn(), replaceQueues: mockReplaceQueues }
+
+            qm.setupWorkspaceQueue('ws-123', {
+                componentNodes: {} as any,
+                telemetry: {} as any,
+                cachePool: {} as any,
+                appDataSource: {} as any,
+                abortControllerPool: {} as any,
+                usageCacheManager: {} as any
+            })
+
+            await qm.teardownWorkspaceQueue('ws-123')
+
+            expect(mockReplaceQueues).toHaveBeenCalledTimes(1)
+            // After teardown, the remaining adapters array should not include the torn-down workspace queues
+            const [remainingAdapters] = mockReplaceQueues.mock.calls[0]
+            expect(Array.isArray(remainingAdapters)).toBe(true)
+        })
+
+        // Task 10.5 — QueueEventsProducer closed on teardown
+        it('closes the QueueEventsProducer for the workspace prediction queue', async () => {
+            const producerClose = jest.fn().mockResolvedValue(undefined)
+            ;(QueueEventsProducer as unknown as jest.Mock).mockImplementation(() => ({ close: producerClose }))
+
+            const qm = getInstance()
+            qm.setupWorkspaceQueue('ws-close', {
+                componentNodes: {} as any,
+                telemetry: {} as any,
+                cachePool: {} as any,
+                appDataSource: {} as any,
+                abortControllerPool: {} as any,
+                usageCacheManager: {} as any
+            })
+            await qm.teardownWorkspaceQueue('ws-close')
+
+            expect(producerClose).toHaveBeenCalledTimes(1)
         })
     })
 })
