@@ -30,6 +30,12 @@ import { GeneralRole } from '../../entities/role.entity'
 import { User } from '../../entities/user.entity'
 import { Organization } from '../../entities/organization.entity'
 import { isInvalidName, isInvalidUUID } from '../../utils/validation.util'
+import { QueueManager } from '../../../queue/QueueManager'
+import { MODE } from '../../../Interface'
+import { invalidateDedicatedQueueCache } from '../../../queue/queueUtils'
+import logger from '../../../utils/logger'
+
+const QUEUE_NAME = process.env.QUEUE_NAME || 'flowise-queue'
 
 // Import non-enterprise database entities for workspace deletion
 import { ChatFlow } from '../../../database/entities/ChatFlow'
@@ -141,13 +147,18 @@ export class WorkspaceManagementService {
 
                 return {
                     ...workspace,
-                    userCount: workspaceUsers.length
-                } as Workspace & { userCount: number }
+                    userCount: workspaceUsers.length,
+                    workerQueueName: workspace.dedicatedQueue
+                        ? `${QUEUE_NAME}-${workspace.id}-prediction`
+                        : `${QUEUE_NAME}-prediction`
+                } as Workspace & { userCount: number; workerQueueName: string }
             })
         )
 
         // Filter out null values (personal workspaces)
-        return filteredWorkspaces.filter((workspace): workspace is Workspace & { userCount: number } => workspace !== null)
+        return filteredWorkspaces.filter(
+            (workspace): workspace is Workspace & { userCount: number; workerQueueName: string } => workspace !== null
+        )
     }
 
     public async readWorkspaceByGeneral(queryRunner: QueryRunner) {
@@ -208,6 +219,18 @@ export class WorkspaceManagementService {
         newWorkspaceData.organizationId = oldWorkspaceData.organizationId
         newWorkspaceData.createdBy = oldWorkspaceData.createdBy
 
+        // Warn when the dedicatedQueue flag is being toggled — change only takes effect for new jobs
+        if (
+            newWorkspaceData.dedicatedQueue !== undefined &&
+            newWorkspaceData.dedicatedQueue !== oldWorkspaceData.dedicatedQueue
+        ) {
+            logger.warn(
+                `[WorkspaceManagement] Workspace ${newWorkspaceData.id} dedicatedQueue toggled ` +
+                `${oldWorkspaceData.dedicatedQueue} → ${newWorkspaceData.dedicatedQueue}. ` +
+                `Change applies to new jobs only; in-flight jobs continue on the previous queue.`
+            )
+        }
+
         let updateWorkspace = queryRunner.manager.merge(Workspace, oldWorkspaceData, newWorkspaceData)
         try {
             await queryRunner.startTransaction()
@@ -218,6 +241,11 @@ export class WorkspaceManagementService {
             throw error
         } finally {
             await queryRunner.release()
+        }
+
+        // Invalidate the dedicatedQueue TTL cache so next job routing sees the updated flag
+        if (updateWorkspace.id) {
+            invalidateDedicatedQueueCache(updateWorkspace.id)
         }
 
         return updateWorkspace
@@ -303,12 +331,30 @@ export class WorkspaceManagementService {
             await queryRunner.release()
         }
 
+        // Fire-and-forget queue teardown after the DB transaction is committed.
+        // Runs only in MODE=queue when the workspace had a dedicated queue.
+        if (process.env.MODE === MODE.QUEUE && workspace.dedicatedQueue && id) {
+            QueueManager.getInstance()
+                .teardownWorkspaceQueue(id)
+                .catch((err) => logger.warn(`[WorkspaceManagement] Failed to tear down queues for workspace ${id}: ${err}`))
+        }
+
+        // Evict the TTL cache so no further jobs are accidentally routed to this workspace
+        if (id) {
+            invalidateDedicatedQueueCache(id)
+        }
+
         return { message: GeneralSuccessMessage.DELETED }
     }
 
     /**
-     * Delete workspace by ID using an existing queryRunner (for transactional operations)
-     * This method is used when deleting a workspace as part of a larger transaction (e.g., deleting user from organization)
+     * Delete workspace by ID using an existing queryRunner (for transactional operations).
+     * This method is used when deleting a workspace as part of a larger transaction (e.g., deleting user from organization).
+     *
+     * **Queue teardown note:** This method runs inside the caller's outer transaction and does NOT trigger
+     * queue teardown itself. When `MODE=queue` and the workspace had `dedicatedQueue=true`, the caller is
+     * responsible for invoking `QueueManager.getInstance().teardownWorkspaceQueue(workspaceId)` after their
+     * outer transaction commits.
      */
     public async deleteWorkspaceById(queryRunner: QueryRunner, workspaceId: string) {
         const workspace = await this.readWorkspaceById(workspaceId, queryRunner)

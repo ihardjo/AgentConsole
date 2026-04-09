@@ -127,5 +127,6 @@ export abstract class BaseQueue {
 
     public async clearQueue(): Promise<void> {
         await this.queue.obliterate({ force: true })
+        await this.queue.close()
     }
 }

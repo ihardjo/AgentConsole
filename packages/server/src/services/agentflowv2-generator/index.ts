@@ -200,6 +200,7 @@ const generateAgentflowv2 = async (question: string, selectedChatModel: Record<s
         let response
 
         if (process.env.MODE === MODE.QUEUE) {
+            // Agentflow generation is not workspace-specific; always uses the shared prediction queue
             const predictionQueue = getRunningExpressApp().queueManager.getQueue('prediction')
             const job = await predictionQueue.addJob({
                 prompt,

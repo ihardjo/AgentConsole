@@ -20,6 +20,7 @@ import {
     TableContainer,
     TableHead,
     TableRow,
+    Tooltip,
     Typography,
     Dialog,
     DialogContent,
@@ -113,9 +114,6 @@ function ShowWorkspaceRow(props) {
     useEffect(() => {
         if (open && selectedWorkspaceId) {
             getAllUsersByWorkspaceIdApi.request(selectedWorkspaceId)
-        } else {
-            setOpen(false)
-            setSelectedWorkspaceId('')
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open])
@@ -123,22 +121,25 @@ function ShowWorkspaceRow(props) {
     return (
         <Fragment key={props.rowKey}>
             <StyledTableRow hover sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
-                <StyledTableCell component='th' scope='row'>
-                    {props.workspace.name}
-                    {currentUser.activeWorkspaceId === props.workspace.id && (
-                        <Chip
-                            sx={{
-                                ml: 2,
-                                my: 'auto',
-                                width: 'max-content',
-                                background: theme.palette.teal.main,
-                                color: 'white'
-                            }}
-                            label={'Active'}
-                        />
-                    )}
+                <StyledTableCell component='th' scope='row' sx={{ overflow: 'hidden' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, overflow: 'hidden' }}>
+                        <Typography variant='body2' noWrap title={props.workspace.name}>
+                            {props.workspace.name}
+                        </Typography>
+                        {currentUser.activeWorkspaceId === props.workspace.id && (
+                            <Chip
+                                sx={{
+                                    flexShrink: 0,
+                                    background: theme.palette.teal.main,
+                                    color: 'white'
+                                }}
+                                label={'Active'}
+                                size='small'
+                            />
+                        )}
+                    </Box>
                 </StyledTableCell>
-                <StyledTableCell style={{ wordWrap: 'break-word', flexWrap: 'wrap', width: '30%' }}>
+                <StyledTableCell style={{ wordWrap: 'break-word' }}>
                     {truncateString(props.workspace?.description || '', 200)}
                 </StyledTableCell>
                 <StyledTableCell sx={{ textAlign: 'center' }}>
@@ -154,8 +155,15 @@ function ShowWorkspaceRow(props) {
                         </IconButton>
                     )}
                 </StyledTableCell>
-                <StyledTableCell>{moment(props.workspace.updatedDate).format('MMMM Do YYYY, hh:mm A')}</StyledTableCell>
                 <StyledTableCell>
+                    <Tooltip title={props.workspace.workerQueueName} placement='top'>
+                        <Typography variant='body2' sx={{ fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {props.workspace.workerQueueName}
+                        </Typography>
+                    </Tooltip>
+                </StyledTableCell>
+                <StyledTableCell sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{moment(props.workspace.updatedDate).format('MMM D YYYY, h:mm A')}</StyledTableCell>
+                <StyledTableCell sx={{ whiteSpace: 'nowrap' }}>
                     {props.workspace.name !== 'Default Workspace' && (
                         <PermissionIconButton
                             permissionId={'workspace:update'}
@@ -188,7 +196,16 @@ function ShowWorkspaceRow(props) {
                         ))}
                 </StyledTableCell>
             </StyledTableRow>
-            <Drawer anchor='right' open={open} onClose={() => setOpen(false)} sx={{ minWidth: 320 }}>
+            <Drawer
+                anchor='right'
+                open={open}
+                onClose={() => {
+                    setOpen(false)
+                    setSelectedWorkspaceId('')
+                    setWorkspaceUsers([])
+                }}
+                sx={{ minWidth: 320 }}
+            >
                 <Box sx={{ p: 4, height: 'auto', width: 650 }}>
                     <Typography sx={{ textAlign: 'left', mb: 2 }} variant='h2'>
                         Users
@@ -493,7 +510,7 @@ const WorkspaceManagement = () => {
                                 sx={{ border: 1, borderColor: theme.palette.grey[900] + 25, borderRadius: 2 }}
                                 component={Paper}
                             >
-                                <Table sx={{ minWidth: 650 }}>
+                                <Table sx={{ tableLayout: 'fixed', width: '100%' }}>
                                     <TableHead
                                         sx={{
                                             backgroundColor: customization.isDarkMode
@@ -503,11 +520,12 @@ const WorkspaceManagement = () => {
                                         }}
                                     >
                                         <TableRow>
-                                            <TableCell>Name</TableCell>
-                                            <TableCell>Description</TableCell>
-                                            <TableCell>Users</TableCell>
-                                            <TableCell>Last Updated</TableCell>
-                                            <TableCell> </TableCell>
+                                            <TableCell sx={{ width: '18%' }}>Name</TableCell>
+                                            <TableCell sx={{ width: '22%' }}>Description</TableCell>
+                                            <TableCell sx={{ width: '7%', textAlign: 'center' }}>Users</TableCell>
+                                            <TableCell sx={{ width: '26%' }}>Worker Queue</TableCell>
+                                            <TableCell sx={{ width: '15%' }}>Last Updated</TableCell>
+                                            <TableCell sx={{ width: '130px' }}> </TableCell>
                                         </TableRow>
                                     </TableHead>
                                     <TableBody>
@@ -529,8 +547,14 @@ const WorkspaceManagement = () => {
                                                     <StyledTableCell>
                                                         <Skeleton variant='text' />
                                                     </StyledTableCell>
+                                                    <StyledTableCell>
+                                                        <Skeleton variant='text' />
+                                                    </StyledTableCell>
                                                 </StyledTableRow>
                                                 <StyledTableRow>
+                                                    <StyledTableCell>
+                                                        <Skeleton variant='text' />
+                                                    </StyledTableCell>
                                                     <StyledTableCell>
                                                         <Skeleton variant='text' />
                                                     </StyledTableCell>

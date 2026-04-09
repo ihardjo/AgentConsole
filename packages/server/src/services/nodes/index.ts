@@ -9,6 +9,7 @@ import { InternalFlowiseError } from '../../errors/internalFlowiseError'
 import { getErrorMessage } from '../../errors/utils'
 import { OMIT_QUEUE_JOB_DATA } from '../../utils/constants'
 import { executeCustomNodeFunction } from '../../utils/executeCustomNodeFunction'
+import { getWorkspaceQueue } from '../../queue/queueUtils'
 
 // Get all component nodes
 const getAllNodes = async () => {
@@ -135,7 +136,9 @@ const executeCustomFunction = async (requestBody: any, workspaceId?: string, org
     }
 
     if (process.env.MODE === MODE.QUEUE) {
-        const predictionQueue = appServer.queueManager.getQueue('prediction')
+        const predictionQueue = workspaceId
+            ? await getWorkspaceQueue('prediction', workspaceId, appServer.queueManager, appServer.AppDataSource)
+            : appServer.queueManager.getQueue('prediction')
 
         const job = await predictionQueue.addJob(omit(executeData, OMIT_QUEUE_JOB_DATA))
         logger.debug(`[server]: Execute Custom Function Job added to queue by ${orgId}: ${job.id}`)
