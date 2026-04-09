@@ -63,4 +63,7 @@ export class Workspace {
 
     @Column({ nullable: false })
     updatedBy?: string
+
+    @Column({ default: false })
+    dedicatedQueue: boolean
 }

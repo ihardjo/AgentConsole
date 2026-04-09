@@ -337,7 +337,11 @@ export class App {
             })
         })
 
-        if (process.env.MODE === MODE.QUEUE && process.env.ENABLE_BULLMQ_DASHBOARD === 'true' && !this.identityManager.isCloud()) {
+        if (
+            process.env.MODE === MODE.QUEUE &&
+            process.env.ENABLE_BULLMQ_DASHBOARD === 'true' &&
+            !this.identityManager.isCloud()
+        ) {
             // Initialize admin queues rate limiter
             const id = 'bullmq_admin_dashboard'
             await this.rateLimiterManager.addRateLimiter(

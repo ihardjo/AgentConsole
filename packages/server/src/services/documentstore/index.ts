@@ -55,6 +55,7 @@ import { DOCUMENTSTORE_TOOL_DESCRIPTION_PROMPT_GENERATOR } from '../../utils/pro
 import { checkStorage, updateStorageUsage } from '../../utils/quotaUsage'
 import { Telemetry } from '../../utils/telemetry'
 import nodesService from '../nodes'
+import { getWorkspaceQueue } from '../../queue/queueUtils'
 
 const createDocumentStore = async (newDocumentStore: DocumentStore, orgId: string) => {
     try {
@@ -693,9 +694,9 @@ const previewChunksMiddleware = async (
         }
 
         if (process.env.MODE === MODE.QUEUE) {
-            const upsertQueue = appServer.queueManager.getQueue('upsert')
+            const upsertQueue = await getWorkspaceQueue('upsert', workspaceId, appServer.queueManager, appServer.AppDataSource)
             const job = await upsertQueue.addJob(omit(executeData, OMIT_QUEUE_JOB_DATA))
-            logger.debug(`[server]: [${orgId}]: Job added to queue: ${job.id}`)
+            logger.debug(`[server]: [${orgId}]: Job added to upsert queue: ${job.id}`)
 
             const queueEvents = upsertQueue.getQueueEvents()
             const result = await job.waitUntilFinished(queueEvents)
@@ -895,9 +896,9 @@ const processLoaderMiddleware = async (
         }
 
         if (process.env.MODE === MODE.QUEUE) {
-            const upsertQueue = appServer.queueManager.getQueue('upsert')
+            const upsertQueue = await getWorkspaceQueue('upsert', workspaceId, appServer.queueManager, appServer.AppDataSource)
             const job = await upsertQueue.addJob(omit(executeData, OMIT_QUEUE_JOB_DATA))
-            logger.debug(`[server]: [${orgId}]: Job added to queue: ${job.id}`)
+            logger.debug(`[server]: [${orgId}]: Job added to upsert queue: ${job.id}`)
 
             if (isInternalRequest) {
                 return {
@@ -1314,9 +1315,9 @@ const insertIntoVectorStoreMiddleware = async (
         }
 
         if (process.env.MODE === MODE.QUEUE) {
-            const upsertQueue = appServer.queueManager.getQueue('upsert')
+            const upsertQueue = await getWorkspaceQueue('upsert', workspaceId, appServer.queueManager, appServer.AppDataSource)
             const job = await upsertQueue.addJob(omit(executeData, OMIT_QUEUE_JOB_DATA))
-            logger.debug(`[server]: [${orgId}]: Job added to queue: ${job.id}`)
+            logger.debug(`[server]: [${orgId}]: Job added to upsert queue: ${job.id}`)
 
             const queueEvents = upsertQueue.getQueueEvents()
             const result = await job.waitUntilFinished(queueEvents)
@@ -2044,9 +2045,9 @@ const upsertDocStoreMiddleware = async (
         }
 
         if (process.env.MODE === MODE.QUEUE) {
-            const upsertQueue = appServer.queueManager.getQueue('upsert')
+            const upsertQueue = await getWorkspaceQueue('upsert', workspaceId, appServer.queueManager, appServer.AppDataSource)
             const job = await upsertQueue.addJob(omit(executeData, OMIT_QUEUE_JOB_DATA))
-            logger.debug(`[server]: [${orgId}]: Job added to queue: ${job.id}`)
+            logger.debug(`[server]: [${orgId}]: Job added to upsert queue: ${job.id}`)
 
             const queueEvents = upsertQueue.getQueueEvents()
             const result = await job.waitUntilFinished(queueEvents)
@@ -2119,9 +2120,9 @@ const refreshDocStoreMiddleware = async (
         }
 
         if (process.env.MODE === MODE.QUEUE) {
-            const upsertQueue = appServer.queueManager.getQueue('upsert')
+            const upsertQueue = await getWorkspaceQueue('upsert', workspaceId, appServer.queueManager, appServer.AppDataSource)
             const job = await upsertQueue.addJob(omit(executeData, OMIT_QUEUE_JOB_DATA))
-            logger.debug(`[server]: [${orgId}]: Job added to queue: ${job.id}`)
+            logger.debug(`[server]: [${orgId}]: Job added to upsert queue: ${job.id}`)
 
             const queueEvents = upsertQueue.getQueueEvents()
             const result = await job.waitUntilFinished(queueEvents)

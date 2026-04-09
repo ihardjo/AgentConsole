@@ -151,7 +151,7 @@ export class RateLimiterManager {
 
         const { limitDuration, limitMax, limitMsg, status } = rateLimit
 
-        if (!isInitialized && process.env.MODE === MODE.QUEUE && this.queueEventsProducer) {
+        if (!isInitialized && (process.env.MODE === MODE.QUEUE) && this.queueEventsProducer) {
             await this.queueEventsProducer.publishEvent({
                 eventName: QUEUE_EVENT_NAME,
                 limitDuration,
@@ -175,7 +175,7 @@ export class RateLimiterManager {
             })
         )
 
-        if (process.env.MODE === MODE.QUEUE && this.queueEvents) {
+        if ((process.env.MODE === MODE.QUEUE) && this.queueEvents) {
             this.queueEvents.on<CustomListener>(
                 QUEUE_EVENT_NAME,
                 async ({

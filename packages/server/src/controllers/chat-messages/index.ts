@@ -312,7 +312,7 @@ const abortChatMessage = async (req: Request, res: Response, next: NextFunction)
                 `Error: chatMessagesController.abortChatMessage - chatflowid or chatid not provided!`
             )
         }
-        await chatMessagesService.abortChatMessage(req.params.chatid, req.params.chatflowid)
+        await chatMessagesService.abortChatMessage(req.params.chatid, req.params.chatflowid, req.user?.activeWorkspaceId)
         return res.json({ status: 200, message: 'Chat message aborted' })
     } catch (error) {
         next(error)
