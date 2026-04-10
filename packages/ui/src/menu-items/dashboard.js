@@ -207,10 +207,10 @@ const dashboard = {
             type: 'group',
             children: [
                 {
-                    id: 'agentEvaluation',
-                    title: 'Agent Evaluation',
+                    id: 'agentPerformance',
+                    title: 'Agent Performance',
                     type: 'item',
-                    url: '/agent-evaluation', // This will be handled by the NavItem component to fetch dynamic URL
+                    url: '/agent-performance', // This will be handled by the NavItem component to fetch dynamic URL
                     icon: icons.IconShieldCheck,
                     breadcrumbs: true,
                     external: true,

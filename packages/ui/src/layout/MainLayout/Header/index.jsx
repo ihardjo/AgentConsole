@@ -139,13 +139,15 @@ const Header = ({ handleLeftDrawerToggle }) => {
                 sx={{
                     width: 228,
                     display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
                     [theme.breakpoints.down('md')]: {
                         width: 'auto'
                     }
                 }}
             >
                 {isAuthenticated && (
-                    <ButtonBase sx={{ borderRadius: '12px', overflow: 'hidden' }}>
+                    <ButtonBase sx={{ borderRadius: '12px', overflow: 'hidden', flexShrink: 0 }}>
                         <Avatar
                             variant='rounded'
                             sx={{
@@ -166,7 +168,7 @@ const Header = ({ handleLeftDrawerToggle }) => {
                         </Avatar>
                     </ButtonBase>
                 )}
-                <Box component='span' sx={{ display: { xs: 'none', md: 'block' }, flexGrow: 1 }}>
+                <Box component='span' sx={{ display: { xs: 'none', md: 'block' } }}>
                     <LogoSection />
                 </Box>
             </Box>

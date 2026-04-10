@@ -106,37 +106,37 @@ export const updateApplicationName = async (req: Request, res: Response, next: N
 }
 
 /**
- * Get Agent Evaluation URL
- * GET /api/v1/platform-config/agent-evaluation-url
+ * Get Agent Performance URL
+ * GET /api/v1/platform-config/agent-performance-url
  */
-export const getAgentEvaluationUrl = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const getAgentPerformanceUrl = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-        const agentEvaluationUrl = platformConfigService.getAgentEvaluationUrl()
-        res.json({ agentEvaluationUrl })
+        const agentPerformanceUrl = platformConfigService.getAgentPerformanceUrl()
+        res.json({ agentPerformanceUrl })
     } catch (error) {
         next(error)
     }
 }
 
 /**
- * Update Agent Evaluation URL
- * PUT /api/v1/platform-config/agent-evaluation-url
+ * Update Agent Performance URL
+ * PUT /api/v1/platform-config/agent-performance-url
  */
-export const updateAgentEvaluationUrl = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const updateAgentPerformanceUrl = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-        const { agentEvaluationUrl } = req.body
+        const { agentPerformanceUrl } = req.body
         
-        if (!agentEvaluationUrl || typeof agentEvaluationUrl !== 'string') {
+        if (!agentPerformanceUrl || typeof agentPerformanceUrl !== 'string') {
             throw new InternalFlowiseError(
                 StatusCodes.BAD_REQUEST,
-                'Agent Evaluation URL is required and must be a string'
+                'Agent Performance URL is required and must be a string'
             )
         }
         
-        platformConfigService.updateAgentEvaluationUrl(agentEvaluationUrl)
+        platformConfigService.updateAgentPerformanceUrl(agentPerformanceUrl)
         res.json({ 
             success: true, 
-            agentEvaluationUrl: platformConfigService.getAgentEvaluationUrl() 
+            agentPerformanceUrl: platformConfigService.getAgentPerformanceUrl() 
         })
     } catch (error) {
         next(error)
