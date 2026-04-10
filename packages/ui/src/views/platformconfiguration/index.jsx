@@ -615,7 +615,7 @@ const PlatformConfiguration = () => {
     const getActiveConfigApi = useApi(platformConfigApi.getActiveConfig)
     const listAssetsApi = useApi(platformConfigApi.listAssets)
     const updateAppNameApi = useApi(platformConfigApi.updateApplicationName)
-    const updateAgentEvaluationUrlApi = useApi(platformConfigApi.updateAgentEvaluationUrl)
+    const updateAgentPerformanceUrlApi = useApi(platformConfigApi.updateAgentPerformanceUrl)
     const uploadLogoApi = useApi(platformConfigApi.uploadLogo)
     const uploadFaviconApi = useApi(platformConfigApi.uploadFavicon)
     const activateAssetApi = useApi(platformConfigApi.activateAsset)
@@ -626,8 +626,8 @@ const PlatformConfiguration = () => {
     const [tabValue, setTabValue] = useState(0)
     const [applicationName, setApplicationName] = useState('')
     const [originalAppName, setOriginalAppName] = useState('')
-    const [agentEvaluationUrl, setAgentEvaluationUrl] = useState('')
-    const [originalAgentEvaluationUrl, setOriginalAgentEvaluationUrl] = useState('')
+    const [agentPerformanceUrl, setAgentPerformanceUrl] = useState('')
+    const [originalAgentPerformanceUrl, setOriginalAgentPerformanceUrl] = useState('')
     const [assets, setAssets] = useState([])
     const [activeConfig, setActiveConfig] = useState(null)
     const [isLoading, setLoading] = useState(true)
@@ -666,8 +666,8 @@ const PlatformConfiguration = () => {
             setActiveConfig(getActiveConfigApi.data)
             setApplicationName(getActiveConfigApi.data.applicationName || '')
             setOriginalAppName(getActiveConfigApi.data.applicationName || '')
-            setAgentEvaluationUrl(getActiveConfigApi.data.agentEvaluationUrl || '')
-            setOriginalAgentEvaluationUrl(getActiveConfigApi.data.agentEvaluationUrl || '')
+            setAgentPerformanceUrl(getActiveConfigApi.data.agentPerformanceUrl || '')
+            setOriginalAgentPerformanceUrl(getActiveConfigApi.data.agentPerformanceUrl || '')
         }
     }, [getActiveConfigApi.data])
 
@@ -715,11 +715,11 @@ const PlatformConfiguration = () => {
         }
     }
 
-    // Save Agent Evaluation URL
-    const handleSaveAgentEvaluationUrl = async () => {
-        if (!agentEvaluationUrl.trim()) {
+    // Save Agent Performance URL
+    const handleSaveAgentPerformanceUrl = async () => {
+        if (!agentPerformanceUrl.trim()) {
             enqueueSnackbar({
-                message: 'Agent Evaluation URL cannot be empty',
+                message: 'Agent Performance URL cannot be empty',
                 options: { variant: 'error' }
             })
             return
@@ -727,15 +727,15 @@ const PlatformConfiguration = () => {
 
         setSaving(true)
         try {
-            await updateAgentEvaluationUrlApi.request(agentEvaluationUrl)
-            setOriginalAgentEvaluationUrl(agentEvaluationUrl)
+            await updateAgentPerformanceUrlApi.request(agentPerformanceUrl)
+            setOriginalAgentPerformanceUrl(agentPerformanceUrl)
             enqueueSnackbar({
-                message: 'Agent Evaluation URL updated successfully',
+                message: 'Agent Performance URL updated successfully',
                 options: { variant: 'success' }
             })
         } catch (error) {
             enqueueSnackbar({
-                message: error.message || 'Failed to update Agent Evaluation URL',
+                message: error.message || 'Failed to update Agent Performance URL',
                 options: { variant: 'error' }
             })
         } finally {
@@ -958,7 +958,7 @@ const PlatformConfiguration = () => {
                                 }}
                             >
                                 <Tab label='Application Name' />
-                                <Tab label='Agent Evaluation URL' />
+                                <Tab label='Agent Performance URL' />
                                 <Tab label='Logo' />
                                 <Tab label='Favicon' />
                             </Tabs>
@@ -1042,7 +1042,7 @@ const PlatformConfiguration = () => {
                                 </Box>
                             )}
 
-                            {/* Agent Evaluation URL Tab */}
+                            {/* Agent Performance URL Tab */}
                             {tabValue === 1 && (
                                 <Box>
                                     <Typography 
@@ -1054,16 +1054,16 @@ const PlatformConfiguration = () => {
                                             letterSpacing: '0.01em'
                                         }}
                                     >
-                                        Set the Agent Evaluation URL for agent evaluation and monitoring. This will be used to track and analyze your AI agent's performance.
+                                        Set the Agent Performance URL for agent performance and monitoring. This will be used to track and analyze your AI agent's performance.
                                     </Typography>
                                     <Stack direction='row' spacing={2} alignItems='center'>
                                         <TextField
-                                            label='Agent Evaluation URL'
-                                            value={agentEvaluationUrl}
-                                            onChange={(e) => setAgentEvaluationUrl(e.target.value)}
+                                            label='Agent Performance URL'
+                                            value={agentPerformanceUrl}
+                                            onChange={(e) => setAgentPerformanceUrl(e.target.value)}
                                             variant='outlined'
                                             size='small'
-                                            placeholder='https://example.com/agent-evaluation/'
+                                            placeholder='https://example.com/agent-performance/'
                                             sx={{ 
                                                 width: 400,
                                                 '& .MuiOutlinedInput-root': {
@@ -1083,8 +1083,8 @@ const PlatformConfiguration = () => {
                                         />
                                         <Button
                                             variant='contained'
-                                            onClick={handleSaveAgentEvaluationUrl}
-                                            disabled={saving || agentEvaluationUrl === originalAgentEvaluationUrl}
+                                            onClick={handleSaveAgentPerformanceUrl}
+                                            disabled={saving || agentPerformanceUrl === originalAgentPerformanceUrl}
                                             startIcon={saving ? <CircularProgress size={16} /> : <IconDeviceFloppy size={18} />}
                                             sx={{
                                                 textTransform: 'none',
@@ -1105,7 +1105,7 @@ const PlatformConfiguration = () => {
                                             Save
                                         </Button>
                                     </Stack>
-                                    {agentEvaluationUrl !== originalAgentEvaluationUrl && (
+                                    {agentPerformanceUrl !== originalAgentPerformanceUrl && (
                                         <Alert 
                                             severity='info' 
                                             sx={{ 

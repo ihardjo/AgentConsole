@@ -40,9 +40,9 @@ const publicRoutes = [
     },
     {
         method: 'get' as const,
-        path: '/agent-evaluation-url',
-        handler: platformConfigController.getAgentEvaluationUrl,
-        description: 'Get Agent Evaluation URL'
+        path: '/agent-performance-url',
+        handler: platformConfigController.getAgentPerformanceUrl,
+        description: 'Get Agent Performance URL'
     }
 ]
 
@@ -81,10 +81,10 @@ registerRoute(router, {
 
 registerRoute(router, {
     method: 'put',
-    path: '/agent-evaluation-url',
-    handler: platformConfigController.updateAgentEvaluationUrl,
+    path: '/agent-performance-url',
+    handler: platformConfigController.updateAgentPerformanceUrl,
     permission: 'platformConfiguration:manage',
-    description: 'Update Agent Evaluation URL'
+    description: 'Update Agent Performance URL'
 })
 
 registerRoute(router, {
