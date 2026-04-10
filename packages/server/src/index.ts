@@ -1,41 +1,40 @@
-import express, { Request, Response } from 'express'
-import path from 'path'
-import cors from 'cors'
-import http from 'http'
+import { ExpressAdapter } from '@bull-board/express'
 import cookieParser from 'cookie-parser'
-import { DataSource, IsNull } from 'typeorm'
-import { MODE, Platform } from './Interface'
-import { getNodeModulesPackagePath, getEncryptionKey } from './utils'
-import logger, { expressRequestLogger } from './utils/logger'
-import { getDataSource } from './DataSource'
-import { NodesPool } from './NodesPool'
-import { ChatFlow } from './database/entities/ChatFlow'
-import { CachePool } from './CachePool'
+import cors from 'cors'
+import express, { Request, Response } from 'express'
+import 'global-agent/bootstrap'
+import http from 'http'
+import path from 'path'
+import { DataSource } from 'typeorm'
 import { AbortControllerPool } from './AbortControllerPool'
-import { RateLimiterManager } from './utils/rateLimit'
-import { getAllowedIframeOrigins, getCorsOptions, sanitizeMiddleware } from './utils/XSS'
-import { Telemetry } from './utils/telemetry'
-import flowiseApiV1Router from './routes'
-import errorHandlerMiddleware from './middlewares/errors'
-import { WHITELIST_URLS } from './utils/constants'
-import { initializeJwtCookieMiddleware, verifyToken, verifyTokenForBullMQDashboard } from './custom-rbac/middleware/passport'
-import { IdentityManager } from './IdentityManager'
-import { SSEStreamer } from './utils/SSEStreamer'
-import { validateAPIKey } from './utils/validateKey'
+import { CachePool } from './CachePool'
+import { ChatFlow } from './database/entities/ChatFlow'
+import { getDataSource } from './DataSource'
 import { LoggedInUser } from './enterprise/Interface.Enterprise'
+import { initAuthSecrets } from './enterprise/utils/authSecrets'
+import { IdentityManager } from './IdentityManager'
+import { MODE, Platform } from './Interface'
 import { IMetricsProvider } from './Interface.Metrics'
-import { Prometheus } from './metrics/Prometheus'
 import { OpenTelemetry } from './metrics/OpenTelemetry'
+import { Prometheus } from './metrics/Prometheus'
+import errorHandlerMiddleware from './middlewares/errors'
+import { NodesPool } from './NodesPool'
 import { QueueManager } from './queue/QueueManager'
 import { RedisEventSubscriber } from './queue/RedisEventSubscriber'
-import 'global-agent/bootstrap'
+import flowiseApiV1Router from './routes'
 import { UsageCacheManager } from './UsageCacheManager'
 import { Workspace } from './custom-rbac/entities/workspace.entity'
 import { Organization } from './custom-rbac/entities/organization.entity'
-import { GeneralRole, Role } from './custom-rbac/entities/role.entity'
-import { migrateApiKeysFromJsonToDb } from './utils/apiKey'
-import { ExpressAdapter } from '@bull-board/express'
 import { initGitSync } from './services/git-sync'
+import { getEncryptionKey, getNodeModulesPackagePath } from './utils'
+import { API_KEY_BLACKLIST_URLS, WHITELIST_URLS } from './utils/constants'
+import logger, { expressRequestLogger } from './utils/logger'
+import { RateLimiterManager } from './utils/rateLimit'
+import { SSEStreamer } from './utils/SSEStreamer'
+import { Telemetry } from './utils/telemetry'
+import { validateAPIKey } from './utils/validateKey'
+import { getAllowedIframeOrigins, getCorsOptions, sanitizeMiddleware } from './utils/XSS'
+import { initializeJwtCookieMiddleware, verifyToken, verifyTokenForBullMQDashboard } from './custom-rbac/middleware/passport'
 
 declare global {
     namespace Express {
@@ -106,6 +105,10 @@ export class App {
             await getEncryptionKey()
             logger.info('🔑 [server]: Encryption key initialized successfully')
 
+            // Initialize auth secrets (env → AWS Secrets Manager → filesystem)
+            await initAuthSecrets()
+            logger.info('🔐 [server]: Auth initialized successfully')
+
             // Initialize Rate Limit
             this.rateLimiterManager = RateLimiterManager.getInstance()
             await this.rateLimiterManager.initializeRateLimiters(await getDataSource().getRepository(ChatFlow).find())
@@ -125,6 +128,7 @@ export class App {
 
             // Initialize SSE Streamer
             this.sseStreamer = new SSEStreamer()
+            this.sseStreamer.startHeartbeat()
             logger.info('🌊 [server]: SSE Streamer initialized successfully')
 
             // Init Queues
@@ -145,11 +149,9 @@ export class App {
 
                 this.redisSubscriber = new RedisEventSubscriber(this.sseStreamer)
                 await this.redisSubscriber.connect()
+                this.redisSubscriber.startPeriodicCleanup()
                 logger.info('🔗 [server]: Redis event subscriber connected successfully')
             }
-
-            // TODO: Remove this by end of 2025
-            await migrateApiKeysFromJsonToDb(this.AppDataSource, this.identityManager.getPlatformType())
 
             // Initialize Git Sync for Agent Ops
             try {
@@ -212,11 +214,6 @@ export class App {
         // Add the sanitizeMiddleware to guard against XSS
         this.app.use(sanitizeMiddleware)
 
-        this.app.use((req, res, next) => {
-            res.header('Access-Control-Allow-Credentials', 'true') // Allow credentials (cookies, etc.)
-            if (next) next()
-        })
-
         const denylistURLs = process.env.DENYLIST_URLS ? process.env.DENYLIST_URLS.split(',') : []
         const whitelistURLs = WHITELIST_URLS.filter((url) => !denylistURLs.includes(url))
         const URL_CASE_INSENSITIVE_REGEX: RegExp = /\/api\/v1\//i
@@ -236,6 +233,11 @@ export class App {
                     } else if (req.headers['x-request-from'] === 'internal') {
                         verifyToken(req, res, next)
                     } else {
+                        const isAPIKeyBlacklistedURLS = API_KEY_BLACKLIST_URLS.some((url) => req.path.startsWith(url))
+                        if (isAPIKeyBlacklistedURLS) {
+                            return res.status(401).json({ error: 'Unauthorized Access' })
+                        }
+
                         // Only check license validity for non-open-source platforms
                         if (this.identityManager.getPlatformType() !== Platform.OPEN_SOURCE) {
                             if (!this.identityManager.isLicenseValid()) {
@@ -243,24 +245,16 @@ export class App {
                             }
                         }
 
-                        const { isValid, workspaceId: apiKeyWorkSpaceId } = await validateAPIKey(req)
-                        if (!isValid) {
+                        const { isValid, apiKey } = await validateAPIKey(req)
+                        if (!isValid || !apiKey) {
                             return res.status(401).json({ error: 'Unauthorized Access' })
                         }
 
                         // Find workspace
                         const workspace = await this.AppDataSource.getRepository(Workspace).findOne({
-                            where: { id: apiKeyWorkSpaceId }
+                            where: { id: apiKey.workspaceId }
                         })
                         if (!workspace) {
-                            return res.status(401).json({ error: 'Unauthorized Access' })
-                        }
-
-                        // Find owner role
-                        const ownerRole = await this.AppDataSource.getRepository(Role).findOne({
-                            where: { name: GeneralRole.OWNER, organizationId: IsNull() }
-                        })
-                        if (!ownerRole) {
                             return res.status(401).json({ error: 'Unauthorized Access' })
                         }
 
@@ -276,17 +270,16 @@ export class App {
                         const customerId = org.customerId as string
                         const features = await this.identityManager.getFeaturesByPlan(subscriptionId)
                         const productId = await this.identityManager.getProductIdFromSubscription(subscriptionId)
-
                         // @ts-ignore
                         req.user = {
-                            permissions: [...JSON.parse(ownerRole.permissions)],
+                            permissions: apiKey.permissions,
                             features,
                             activeOrganizationId: activeOrganizationId,
                             activeOrganizationSubscriptionId: subscriptionId,
                             activeOrganizationCustomerId: customerId,
                             activeOrganizationProductId: productId,
-                            isOrganizationAdmin: true,
-                            activeWorkspaceId: apiKeyWorkSpaceId!,
+                            isOrganizationAdmin: false,
+                            activeWorkspaceId: workspace.id,
                             activeWorkspace: workspace.name
                         }
                         next()
@@ -337,11 +330,7 @@ export class App {
             })
         })
 
-        if (
-            process.env.MODE === MODE.QUEUE &&
-            process.env.ENABLE_BULLMQ_DASHBOARD === 'true' &&
-            !this.identityManager.isCloud()
-        ) {
+        if (process.env.MODE === MODE.QUEUE && process.env.ENABLE_BULLMQ_DASHBOARD === 'true' && !this.identityManager.isCloud()) {
             // Initialize admin queues rate limiter
             const id = 'bullmq_admin_dashboard'
             await this.rateLimiterManager.addRateLimiter(
@@ -376,6 +365,7 @@ export class App {
 
     async stopApp() {
         try {
+            this.sseStreamer.stopHeartbeat()
             const removePromises: any[] = []
             removePromises.push(this.telemetry.flush())
             if (this.queueManager) {

@@ -10,12 +10,12 @@ const getAllEvaluators = async (workspaceId: string, page: number = -1, limit: n
         const appServer = getRunningExpressApp()
         const queryBuilder = appServer.AppDataSource.getRepository(Evaluator).createQueryBuilder('ev').orderBy('ev.updatedDate', 'DESC')
         queryBuilder.andWhere('ev.workspaceId = :workspaceId', { workspaceId })
-        
+
         // Add search filter if search term is provided
         if (search && search.trim()) {
             queryBuilder.andWhere('LOWER(ev.name) LIKE LOWER(:search)', { search: `%${search.trim()}%` })
         }
-        
+
         if (page > 0 && limit > 0) {
             queryBuilder.skip((page - 1) * limit)
             queryBuilder.take(limit)
@@ -59,6 +59,7 @@ const createEvaluator = async (body: any) => {
     try {
         const appServer = getRunningExpressApp()
         const newDs = EvaluatorDTO.toEntity(body)
+        newDs.workspaceId = body.workspaceId
 
         const evaluator = appServer.AppDataSource.getRepository(Evaluator).create(newDs)
         const result = await appServer.AppDataSource.getRepository(Evaluator).save(evaluator)
@@ -84,6 +85,7 @@ const updateEvaluator = async (id: string, body: any, workspaceId: string) => {
 
         const updateEvaluator = EvaluatorDTO.toEntity(body)
         updateEvaluator.id = id
+        updateEvaluator.workspaceId = workspaceId
         appServer.AppDataSource.getRepository(Evaluator).merge(evaluator, updateEvaluator)
         const result = await appServer.AppDataSource.getRepository(Evaluator).save(evaluator)
         return EvaluatorDTO.fromEntity(result)
