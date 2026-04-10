@@ -1,5 +1,5 @@
-import logo from '@/assets/images/flowise_white.svg'
-import logoDark from '@/assets/images/flowise_dark.svg'
+import logo from '@/assets/images/ai_reinvention_engine.svg'
+import logoDark from '@/assets/images/ai_reinvention_engine_dark.svg'
 
 import { useSelector } from 'react-redux'
 import { useEffect, useState } from 'react'
@@ -62,13 +62,11 @@ const Logo = () => {
     const logoSrc = customLogo || (customization.isDarkMode ? logoDark : logo)
 
     return (
-        <div style={{ alignItems: 'center', display: 'flex', flexDirection: 'row', marginLeft: '10px' }}>
-            <img
-                style={{ objectFit: 'contain', height: 'auto', width: 150 }}
-                src={logoSrc}
-                alt='AI Reinvention Studio'
-            />
-        </div>
+        <img
+            style={{ objectFit: 'contain', height: '44px', width: 'auto' }}
+            src={logoSrc}
+            alt='AI Reinvention Engine'
+        />
     )
 }
 

@@ -1,7 +1,7 @@
 import ComingSoonPage from '@/ui-component/comingsoon/Comingsoon'
 
-const AgentEvaluation = () => {
-    return <ComingSoonPage title='Agent Evaluation' />
+const AgentPerformance = () => {
+    return <ComingSoonPage title='Agent Performance' />
 }
 
-export default AgentEvaluation
+export default AgentPerformance

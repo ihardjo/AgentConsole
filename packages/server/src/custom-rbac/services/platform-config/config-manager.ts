@@ -94,8 +94,8 @@ class ConfigManager {
      * Set default values
      */
     private setDefaults(): void {
-        this.config.set('applicationName', process.env.APPLICATION_NAME || 'AI Reinvention Studio')
-        this.config.set('agentEvaluationUrl', process.env.AGENT_EVALUATION_URL || 'https://example.com/agent-evaluation/')
+        this.config.set('applicationName', process.env.APPLICATION_NAME || 'AI Reinvention Engine')
+        this.config.set('agentPerformanceUrl', process.env.AGENT_PERFORMANCE_URL || 'https://example.com/agent-performance/')
     }
 
     /**

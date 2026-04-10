@@ -24,7 +24,7 @@ import fs from 'fs'
 
 // Constants
 const PLATFORM_ASSETS_FOLDER = 'platform-assets'
-const DEFAULT_APPLICATION_NAME = 'AI Reinvention Studio'
+const DEFAULT_APPLICATION_NAME = 'AI Reinvention Engine'
 
 // Allowed MIME types for each asset type
 const ALLOWED_MIME_TYPES: Record<PlatformAssetType, string[]> = {
@@ -63,11 +63,11 @@ const getRepository = (): Repository<PlatformAsset> => {
 }
 
 /**
- * Get the active configuration including app name, agent evaluation URL, and active assets
+ * Get the active configuration including app name, agent performance URL, and active assets
  */
 export const getActiveConfig = async (): Promise<{
     applicationName: string
-    agentEvaluationUrl: string
+    agentPerformanceUrl: string
     activeLogo: PlatformAsset | null
     activeFavicon: PlatformAsset | null
 }> => {
@@ -84,7 +84,7 @@ export const getActiveConfig = async (): Promise<{
     
     return {
         applicationName: configManager.get<string>('applicationName') || DEFAULT_APPLICATION_NAME,
-        agentEvaluationUrl: configManager.get<string>('agentEvaluationUrl') || 'https://example.com/agent-evaluation/',
+        agentPerformanceUrl: configManager.get<string>('agentPerformanceUrl') || 'https://example.com/agent-performance/',
         activeLogo,
         activeFavicon
     }
@@ -108,23 +108,23 @@ export const updateApplicationName = (name: string): void => {
 }
 
 /**
- * Get Agent Evaluation URL
+ * Get Agent Performance URL
  */
-export const getAgentEvaluationUrl = (): string => {
-    return configManager.get<string>('agentEvaluationUrl') || 'https://example.com/agent-evaluation/'
+export const getAgentPerformanceUrl = (): string => {
+    return configManager.get<string>('agentPerformanceUrl') || 'https://example.com/agent-performance/'
 }
 
 /**
- * Update Agent Evaluation URL (hot reloadable)
+ * Update Agent Performance URL (hot reloadable)
  */
-export const updateAgentEvaluationUrl = (url: string): void => {
+export const updateAgentPerformanceUrl = (url: string): void => {
     if (!url || url.trim().length === 0) {
-        throw new Error('Agent Evaluation URL cannot be empty')
+        throw new Error('Agent Performance URL cannot be empty')
     }
     // Ensure URL ends with /
     const trimmedUrl = url.trim()
     const normalizedUrl = trimmedUrl.endsWith('/') ? trimmedUrl : `${trimmedUrl}/`
-    configManager.set('agentEvaluationUrl', normalizedUrl)
+    configManager.set('agentPerformanceUrl', normalizedUrl)
 }
 
 /**

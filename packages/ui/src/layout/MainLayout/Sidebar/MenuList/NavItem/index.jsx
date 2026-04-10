@@ -27,15 +27,15 @@ const NavItem = ({ item, level, navType, onClick, onUploadFile }) => {
 
     // Fetch dynamic URL for items with dynamicUrl flag
     useEffect(() => {
-        if (item?.dynamicUrl && item?.id === 'agentEvaluation') {
-            platformConfigApi.getAgentEvaluationUrl()
+        if (item?.dynamicUrl && item?.id === 'agentPerformance') {
+            platformConfigApi.getAgentPerformanceUrl()
                 .then(response => {
-                    if (response.data?.agentEvaluationUrl) {
-                        setDynamicUrl(response.data.agentEvaluationUrl)
+                    if (response.data?.agentPerformanceUrl) {
+                        setDynamicUrl(response.data.agentPerformanceUrl)
                     }
                 })
                 .catch(error => {
-                    console.error('Failed to fetch Agent Evaluation URL:', error)
+                    console.error('Failed to fetch Agent Performance URL:', error)
                 })
         }
     }, [item])
