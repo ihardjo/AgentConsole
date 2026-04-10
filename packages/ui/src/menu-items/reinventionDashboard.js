@@ -227,13 +227,16 @@ const reinventionDashboard = {
                     alwaysShow: true
                 },
                 {
-                    id: 'agentOps',
+                    id: 'agentPerformance',
                     title: 'Agent Performance',
                     type: 'item',
                     url: '/coming-soon',
                     icon: icons.IconBrain,
                     breadcrumbs: true,
-                    alwaysShow: true
+                    alwaysShow: true,
+                    dynamicUrl: true,
+                    external: true,
+                    target: true
                 }
             ]
         },
