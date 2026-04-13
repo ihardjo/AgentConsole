@@ -38,7 +38,6 @@ export const WHITELIST_URLS = [
     '/api/v1/account-management/forgot-password',
     '/api/v1/account-management/reset-password',
     '/api/v1/account-management/basic-auth',
-    '/api/v1/loginmethod',
     '/api/v1/loginmethod/default',
     '/api/v1/pricing',
     '/api/v1/user/test',
