@@ -54,15 +54,14 @@ const getAllTools = async (workspaceId?: string, page: number = -1, limit: numbe
             queryBuilder.take(limit)
         }
         if (workspaceId) queryBuilder.andWhere('tool.workspaceId = :workspaceId', { workspaceId })
-        
+
         // Add search filter if search term is provided
         if (search && search.trim()) {
-            queryBuilder.andWhere(
-                '(LOWER(tool.name) LIKE LOWER(:search) OR LOWER(tool.description) LIKE LOWER(:search))',
-                { search: `%${search.trim()}%` }
-            )
+            queryBuilder.andWhere('(LOWER(tool.name) LIKE LOWER(:search) OR LOWER(tool.description) LIKE LOWER(:search))', {
+                search: `%${search.trim()}%`
+            })
         }
-        
+
         const [data, total] = await queryBuilder.getManyAndCount()
 
         if (page > 0 && limit > 0) {
@@ -104,6 +103,7 @@ const updateTool = async (toolId: string, toolBody: any, workspaceId: string): P
         const updateTool = new Tool()
         Object.assign(updateTool, toolBody)
         appServer.AppDataSource.getRepository(Tool).merge(tool, updateTool)
+        tool.workspaceId = workspaceId // defense-in-depth: never trust client-supplied workspaceId
         const dbResponse = await appServer.AppDataSource.getRepository(Tool).save(tool)
         return dbResponse
     } catch (error) {

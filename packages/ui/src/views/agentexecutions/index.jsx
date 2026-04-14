@@ -5,33 +5,33 @@ import 'react-datepicker/dist/react-datepicker.css'
 // material-ui
 import {
     Box,
-    Stack,
-    TextField,
-    MenuItem,
     Button,
-    Grid,
-    FormControl,
-    InputLabel,
-    Select,
     Dialog,
     DialogActions,
     DialogContent,
     DialogContentText,
     DialogTitle,
+    FormControl,
+    Grid,
     IconButton,
+    InputLabel,
+    MenuItem,
+    Select,
+    Stack,
+    TextField,
     Tooltip,
     useTheme
 } from '@mui/material'
 
 // project imports
-import MainCard from '@/ui-component/cards/MainCard'
 import ErrorBoundary from '@/ErrorBoundary'
 import ViewHeader from '@/layout/MainLayout/ViewHeader'
+import MainCard from '@/ui-component/cards/MainCard'
 import { Available } from '@/ui-component/rbac/available'
 
 // API
-import useApi from '@/hooks/useApi'
 import executionsApi from '@/api/executions'
+import useApi from '@/hooks/useApi'
 import { useSelector } from 'react-redux'
 import { useDebounceValue } from '@/hooks/useDebounce'
 
@@ -40,10 +40,10 @@ import execution_empty from '@/assets/images/executions_empty.svg'
 import { IconTrash } from '@tabler/icons-react'
 
 // const
-import { ExecutionsListTable } from '@/ui-component/table/ExecutionsListTable'
-import { ExecutionDetails } from './ExecutionDetails'
-import { omit } from 'lodash'
 import TablePagination, { DEFAULT_ITEMS_PER_PAGE } from '@/ui-component/pagination/TablePagination'
+import { ExecutionsListTable } from '@/ui-component/table/ExecutionsListTable'
+import { omit } from 'lodash'
+import { ExecutionDetails } from './ExecutionDetails'
 
 // ==============================|| AGENT EXECUTIONS ||============================== //
 
@@ -102,56 +102,60 @@ const AgentExecutions = () => {
 
     /* Table Pagination */
     const [currentPage, setCurrentPage] = useState(1)
-    const [pageLimit, setPageLimit] = useState(DEFAULT_ITEMS_PER_PAGE)
+    const [pageLimit, setPageLimit] = useState(() => Number(localStorage.getItem('executionsPageSize') || DEFAULT_ITEMS_PER_PAGE))
     const [total, setTotal] = useState(0)
     const onChange = (page, pageLimit) => {
         setCurrentPage(page)
         setPageLimit(pageLimit)
+        localStorage.setItem('executionsPageSize', pageLimit)
         applyFilters(page, pageLimit)
     }
 
-    const applyFilters = useCallback((page, limit, overrideFilters = {}) => {
-        setLoading(true)
-        // Ensure page and limit are numbers, not objects
-        const pageNum = typeof page === 'number' ? page : currentPage
-        const limitNum = typeof limit === 'number' ? limit : pageLimit
+    const applyFilters = useCallback(
+        (page, limit, overrideFilters = {}) => {
+            setLoading(true)
+            // Ensure page and limit are numbers, not objects
+            const pageNum = typeof page === 'number' ? page : currentPage
+            const limitNum = typeof limit === 'number' ? limit : pageLimit
 
-        // Use overrideFilters for debounced values, otherwise use current filters
-        const currentFilters = { ...filters, ...overrideFilters }
+            // Use overrideFilters for debounced values, otherwise use current filters
+            const currentFilters = { ...filters, ...overrideFilters }
 
-        const params = {
-            page: pageNum,
-            limit: limitNum
-        }
+            const params = {
+                page: pageNum,
+                limit: limitNum
+            }
 
-        if (currentFilters.state) params.state = currentFilters.state
+            if (currentFilters.state) params.state = currentFilters.state
 
-        // Create date strings that preserve the exact date values
-        if (currentFilters.startDate) {
-            const date = new Date(currentFilters.startDate)
-            // Format date as YYYY-MM-DD and set to start of day in UTC
-            // This ensures the server sees the same date we've selected regardless of timezone
-            const year = date.getFullYear()
-            const month = String(date.getMonth() + 1).padStart(2, '0')
-            const day = String(date.getDate()).padStart(2, '0')
-            params.startDate = `${year}-${month}-${day}T00:00:00.000Z`
-        }
+            // Create date strings that preserve the exact date values
+            if (currentFilters.startDate) {
+                const date = new Date(currentFilters.startDate)
+                // Format date as YYYY-MM-DD and set to start of day in UTC
+                // This ensures the server sees the same date we've selected regardless of timezone
+                const year = date.getFullYear()
+                const month = String(date.getMonth() + 1).padStart(2, '0')
+                const day = String(date.getDate()).padStart(2, '0')
+                params.startDate = `${year}-${month}-${day}T00:00:00.000Z`
+            }
 
-        if (currentFilters.endDate) {
-            const date = new Date(currentFilters.endDate)
-            // Format date as YYYY-MM-DD and set to end of day in UTC
-            const year = date.getFullYear()
-            const month = String(date.getMonth() + 1).padStart(2, '0')
-            const day = String(date.getDate()).padStart(2, '0')
-            params.endDate = `${year}-${month}-${day}T23:59:59.999Z`
-        }
+            if (currentFilters.endDate) {
+                const date = new Date(currentFilters.endDate)
+                // Format date as YYYY-MM-DD and set to end of day in UTC
+                const year = date.getFullYear()
+                const month = String(date.getMonth() + 1).padStart(2, '0')
+                const day = String(date.getDate()).padStart(2, '0')
+                params.endDate = `${year}-${month}-${day}T23:59:59.999Z`
+            }
 
-        if (currentFilters.agentflowId) params.agentflowId = currentFilters.agentflowId
-        if (currentFilters.agentflowName) params.agentflowName = currentFilters.agentflowName
-        if (currentFilters.sessionId) params.sessionId = currentFilters.sessionId
+            if (currentFilters.agentflowId) params.agentflowId = currentFilters.agentflowId
+            if (currentFilters.agentflowName) params.agentflowName = currentFilters.agentflowName
+            if (currentFilters.sessionId) params.sessionId = currentFilters.sessionId
 
-        getAllExecutions.request(params)
-    }, [currentPage, pageLimit, filters, getAllExecutions])
+            getAllExecutions.request(params)
+        },
+        [currentPage, pageLimit, filters, getAllExecutions]
+    )
 
     const resetFilters = () => {
         setFilters({

@@ -1,6 +1,7 @@
 import { ICommonObject, removeFolderFromStorage } from 'flowise-components'
 import { StatusCodes } from 'http-status-codes'
-import { In } from 'typeorm'
+import { Brackets, In } from 'typeorm'
+import { validate as isValidUUID } from 'uuid'
 import { ChatflowType, IReactFlowObject } from '../../Interface'
 import { FLOWISE_COUNTER_STATUS, FLOWISE_METRIC_COUNTERS } from '../../Interface.Metrics'
 import { UsageCacheManager } from '../../UsageCacheManager'
@@ -16,14 +17,17 @@ import { InternalFlowiseError } from '../../errors/internalFlowiseError'
 import { getErrorMessage } from '../../errors/utils'
 import documentStoreService from '../../services/documentstore'
 import { constructGraphs, getAppVersion, getEndingNodes, getTelemetryFlowObj, isFlowValidForStream } from '../../utils'
+import { sanitizeAllowedUploadMimeTypesFromConfig } from '../../utils/fileValidation'
 import { containsBase64File, updateFlowDataWithFilePaths } from '../../utils/fileRepository'
+import { sanitizeFlowDataForPublicEndpoint } from '../../utils/sanitizeFlowData'
 import { getRunningExpressApp } from '../../utils/getRunningExpressApp'
 import { utilGetUploadsConfig } from '../../utils/getUploadsConfig'
 import logger from '../../utils/logger'
 import { updateStorageUsage } from '../../utils/quotaUsage'
 
 export const enum ChatflowErrorMessage {
-    INVALID_CHATFLOW_TYPE = 'Invalid Chatflow Type'
+    INVALID_CHATFLOW_TYPE = 'Invalid Chatflow Type',
+    INVALID_CHATFLOW_ID = 'Invalid Chatflow ID'
 }
 
 export function validateChatflowType(type: ChatflowType | undefined) {
@@ -186,7 +190,7 @@ const getAllChatflows = async (type?: ChatflowType, workspaceId?: string, page: 
             queryBuilder.andWhere('chat_flow.type = :type', { type: 'CHATFLOW' })
         }
         if (workspaceId) queryBuilder.andWhere('chat_flow.workspaceId = :workspaceId', { workspaceId })
-        
+
         // Add search filter if search term is provided
         if (search && search.trim()) {
             queryBuilder.andWhere(
@@ -194,10 +198,10 @@ const getAllChatflows = async (type?: ChatflowType, workspaceId?: string, page: 
                 { search: `%${search.trim()}%` }
             )
         }
-        
+
         const result = await queryBuilder.getRawAndEntities()
         const total = await queryBuilder.getCount()
-        
+
         // Map the raw data to include createdBy and updatedBy from the joined metadata
         const data = result.entities.map((chatflow: any, index: number) => {
             const metadata = result.raw[index]
@@ -261,16 +265,21 @@ const getAllChatflowsCount = async (type?: ChatflowType, workspaceId?: string): 
     }
 }
 
-const getChatflowByApiKey = async (apiKeyId: string, keyonly?: unknown): Promise<any> => {
+const getChatflowByApiKey = async (apiKeyId: string, workspaceId: string, keyonly?: unknown): Promise<any> => {
     try {
         // Here we only get chatflows that are bounded by the apikeyid and chatflows that are not bounded by any apikey
         const appServer = getRunningExpressApp()
         let query = appServer.AppDataSource.getRepository(ChatFlow)
             .createQueryBuilder('cf')
-            .where('cf.apikeyid = :apikeyid', { apikeyid: apiKeyId })
-        if (keyonly === undefined) {
-            query = query.orWhere('cf.apikeyid IS NULL').orWhere('cf.apikeyid = ""')
-        }
+            .where('cf.workspaceId = :workspaceId', { workspaceId })
+            .andWhere(
+                new Brackets((qb) => {
+                    qb.where('cf.apikeyid = :apikeyid', { apikeyid: apiKeyId })
+                    if (keyonly === undefined) {
+                        qb.orWhere('cf.apikeyid IS NULL').orWhere('cf.apikeyid = ""')
+                    }
+                })
+            )
 
         const dbResponse = await query.orderBy('cf.name', 'ASC').getMany()
         if (dbResponse.length < 1) {
@@ -287,6 +296,9 @@ const getChatflowByApiKey = async (apiKeyId: string, keyonly?: unknown): Promise
 
 const getChatflowById = async (chatflowId: string, workspaceId?: string): Promise<any> => {
     try {
+        if (!isValidUUID(chatflowId)) {
+            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, ChatflowErrorMessage.INVALID_CHATFLOW_ID)
+        }
         const appServer = getRunningExpressApp()
         const dbResponse = await appServer.AppDataSource.getRepository(ChatFlow).findOne({
             where: {
@@ -299,6 +311,9 @@ const getChatflowById = async (chatflowId: string, workspaceId?: string): Promis
         }
         return dbResponse
     } catch (error) {
+        if (error instanceof InternalFlowiseError) {
+            throw error
+        }
         throw new InternalFlowiseError(
             StatusCodes.INTERNAL_SERVER_ERROR,
             `Error: chatflowsService.getChatflowById - ${getErrorMessage(error)}`
@@ -401,8 +416,24 @@ const updateChatflow = async (
     } else {
         updateChatFlow.type = chatflow.type
     }
+    if (updateChatFlow.chatbotConfig) {
+        try {
+            const parsed = JSON.parse(updateChatFlow.chatbotConfig) as ICommonObject
+            if (parsed?.fullFileUpload?.allowedUploadFileTypes !== undefined) {
+                const current = parsed.fullFileUpload.allowedUploadFileTypes
+                const sanitized = sanitizeAllowedUploadMimeTypesFromConfig(typeof current === 'string' ? current : String(current ?? ''))
+                parsed.fullFileUpload.allowedUploadFileTypes = sanitized
+                updateChatFlow.chatbotConfig = JSON.stringify(parsed)
+            }
+        } catch (error) {
+            const message = getErrorMessage(error)
+            logger.error(`[server]: Invalid chatbotConfig JSON in updateChatflow: ${message}`)
+            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, `Invalid chatbotConfig: ${message}`)
+        }
+    }
     const newDbChatflow = appServer.AppDataSource.getRepository(ChatFlow).merge(chatflow, updateChatFlow)
-    await _checkAndUpdateDocumentStoreUsage(newDbChatflow, chatflow.workspaceId)
+    newDbChatflow.workspaceId = workspaceId // defense-in-depth: use trusted param, not chatflow.workspaceId (merge mutates in-place)
+    await _checkAndUpdateDocumentStoreUsage(newDbChatflow, workspaceId)
     const dbResponse = await appServer.AppDataSource.getRepository(ChatFlow).save(newDbChatflow)
 
     // Update metadata entry
@@ -428,7 +459,7 @@ const updateChatflow = async (
 }
 
 // Get specific chatflow chatbotConfig via id (PUBLIC endpoint, used to retrieve config for embedded chat)
-// Safe as public endpoint as chatbotConfig doesn't contain sensitive credential
+// flowData is sanitized before returning — password, file, folder inputs and credential references are stripped
 const getSinglePublicChatbotConfig = async (chatflowId: string): Promise<any> => {
     try {
         const appServer = getRunningExpressApp()
@@ -457,7 +488,12 @@ const getSinglePublicChatbotConfig = async (chatflowId: string): Promise<any> =>
                 }
                 delete parsedConfig.allowedOrigins
                 delete parsedConfig.allowedOriginsError
-                return { ...parsedConfig, uploads: uploadsConfig, flowData: dbResponse.flowData, isTTSEnabled }
+                return {
+                    ...parsedConfig,
+                    uploads: uploadsConfig,
+                    flowData: sanitizeFlowDataForPublicEndpoint(dbResponse.flowData),
+                    isTTSEnabled
+                }
             } catch (e) {
                 throw new InternalFlowiseError(StatusCodes.INTERNAL_SERVER_ERROR, `Error parsing Chatbot Config for Chatflow ${chatflowId}`)
             }
