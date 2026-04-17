@@ -1,71 +1,113 @@
 import { useEffect } from 'react'
 
+// ─── helpers ─────────────────────────────────────────────────────────────────
+
 /**
- * Hook to load and update platform configuration (app name and favicon)
- * This runs when the user is authenticated and has access to the platform
+ * Apply (or clear) the favicon <link> tag in <head>.
+ * Pass a non-empty URL string to activate a custom favicon,
+ * or '' / falsy to fall back to /favicon.ico.
+ */
+const applyFavicon = (url) => {
+    const faviconUrl = url || '/favicon.ico'
+    const appleTouchUrl = url || '/logo192.png'
+
+    let faviconLink = document.querySelector("link[rel*='icon']")
+    if (!faviconLink) {
+        faviconLink = document.createElement('link')
+        faviconLink.rel = 'icon'
+        document.head.appendChild(faviconLink)
+    }
+    faviconLink.href = faviconUrl
+
+    const appleTouchIcon = document.querySelector("link[rel='apple-touch-icon']")
+    if (appleTouchIcon) appleTouchIcon.href = appleTouchUrl
+}
+
+// ─── hook ────────────────────────────────────────────────────────────────────
+
+/**
+ * Hook to apply and update the favicon for authenticated / public layouts.
+ *
+ * Strategy:
+ *   • On every layout mount we first check localStorage (`platform_favicon_active`)
+ *     and apply it instantly — zero network round-trip for warm loads.
+ *   • When a `platformFaviconUpdated` / `platformLogoUpdated` / `platformAppNameUpdated`
+ *     event fires we skip the cache and re-validate with the server, then update the
+ *     cache so the next page load stays warm.
+ *
+ * The document.title / appName is managed exclusively by ConfigContext — this hook
+ * does NOT touch it, eliminating the dual-writer race condition.
  */
 export const usePlatformConfig = () => {
     useEffect(() => {
-        const loadPlatformConfig = async () => {
+        /**
+         * Apply the favicon, optionally bypassing the localStorage cache.
+         * @param {boolean} skipCache  When true, always hits the network.
+         */
+        const loadFavicon = async (skipCache = false) => {
             try {
-                // Load app name
-                const appNameResponse = await fetch(`${window.location.origin}/api/v1/platform-configuration/app-name`)
-                if (appNameResponse.ok) {
-                    const data = await appNameResponse.json()
-                    if (data.applicationName && data.applicationName.trim()) {
-                        document.title = data.applicationName
+                // ── 1. Cache-first ──────────────────────────────────────────
+                if (!skipCache) {
+                    const cached = localStorage.getItem('platform_favicon_active')
+                    if (cached !== null) {
+                        // Cache hit: apply immediately without any network request.
+                        if (cached === '1') {
+                            // Use a fresh timestamp so the browser actually fetches
+                            // the current file rather than a stale browser-cache entry.
+                            applyFavicon(`${window.location.origin}/api/v1/platform-configuration/favicon?t=${Date.now()}`)
+                        } else {
+                            applyFavicon('')
+                        }
+                        return
                     }
                 }
 
-                // Load favicon — use URL-based approach (no Blob URL, no memory leak)
-                // Add timestamp to bust browser cache
-                const faviconCheckResponse = await fetch(`${window.location.origin}/api/v1/platform-configuration/favicon?t=${Date.now()}`)
-                if (faviconCheckResponse.ok) {
+                // ── 2. Network fetch (cache miss or forced refresh) ─────────
+                // IMPORTANT: check status === 200 explicitly.
+                // response.ok is true for any 2xx — including 204 No Content
+                // (what the server returns when no favicon is active).
+                // Using response.ok would set the <link> href to the API URL
+                // even when the response has no body, breaking the favicon.
+                const faviconResponse = await fetch(`${window.location.origin}/api/v1/platform-configuration/favicon?t=${Date.now()}`)
+
+                if (faviconResponse.status === 200) {
                     const faviconUrl = `${window.location.origin}/api/v1/platform-configuration/favicon?t=${Date.now()}`
-
-                    // Update favicon link
-                    let faviconLink = document.querySelector("link[rel*='icon']")
-                    if (!faviconLink) {
-                        faviconLink = document.createElement('link')
-                        faviconLink.rel = 'icon'
-                        document.head.appendChild(faviconLink)
+                    try {
+                        localStorage.setItem('platform_favicon_active', '1')
+                    } catch (_) {
+                        // intentionally empty
                     }
-                    faviconLink.href = faviconUrl
-
-                    // Also update apple-touch-icon if it exists
-                    const appleTouchIcon = document.querySelector("link[rel='apple-touch-icon']")
-                    if (appleTouchIcon) {
-                        appleTouchIcon.href = faviconUrl
+                    applyFavicon(faviconUrl)
+                } else {
+                    // 204 No Content (no active favicon) or any other non-200 response
+                    // → explicitly reset to the default favicon so a previously-active
+                    //   custom favicon is cleared in all layouts / menus.
+                    try {
+                        localStorage.setItem('platform_favicon_active', '0')
+                    } catch (_) {
+                        // intentionally empty
                     }
+                    applyFavicon('')
                 }
             } catch (error) {
-                console.log('Using default platform configuration')
+                // Network error — leave whatever is currently set untouched.
+                console.log('Could not reach platform configuration endpoint for favicon')
             }
         }
 
-        loadPlatformConfig()
+        // Initial load — use cache if available.
+        loadFavicon(false)
 
-        // Listen for platform configuration updates
-        const handleLogoUpdate = () => {
-            loadPlatformConfig()
-        }
+        // ── Event listeners ────────────────────────────────────────────────
+        // Only the favicon event matters here — logo and app-name changes do
+        // not affect the favicon state, so those events are intentionally
+        // not listened to in this hook.
+        const handleFaviconUpdate = () => loadFavicon(true)
 
-        const handleFaviconUpdate = () => {
-            loadPlatformConfig()
-        }
-
-        const handleAppNameUpdate = () => {
-            loadPlatformConfig()
-        }
-
-        window.addEventListener('platformLogoUpdated', handleLogoUpdate)
         window.addEventListener('platformFaviconUpdated', handleFaviconUpdate)
-        window.addEventListener('platformAppNameUpdated', handleAppNameUpdate)
 
         return () => {
-            window.removeEventListener('platformLogoUpdated', handleLogoUpdate)
             window.removeEventListener('platformFaviconUpdated', handleFaviconUpdate)
-            window.removeEventListener('platformAppNameUpdated', handleAppNameUpdate)
         }
     }, [])
 }

@@ -2,7 +2,23 @@
 <html lang="en">
     <head>
         <title>AI Reinvention Engine</title>
+        <!-- Restore cached app name immediately to prevent tab-title flicker on reload -->
+        <script>
+            try {
+                var n = localStorage.getItem('platform_app_name')
+                if (n) document.title = n
+            } catch (e) {}
+        </script>
         <link rel="icon" href="favicon.ico" />
+        <!-- Restore cached favicon immediately to prevent favicon flicker on reload -->
+        <script>
+            try {
+                if (localStorage.getItem('platform_favicon_active') === '1') {
+                    var fl = document.querySelector("link[rel*='icon']")
+                    if (fl) fl.href = '/api/v1/platform-configuration/favicon?t=' + Date.now()
+                }
+            } catch (e) {}
+        </script>
         <!-- Meta Tags-->
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />

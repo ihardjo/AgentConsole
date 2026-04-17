@@ -1,6 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
-import { useSelector } from 'react-redux'
-
+import { useState, useEffect, useCallback, useRef } from 'react'
+import PropTypes from 'prop-types'
 // material-ui
 import {
     Box,
@@ -40,19 +39,11 @@ import useConfirm from '@/hooks/useConfirm'
 import useNotifier from '@/utils/useNotifier'
 
 // icons
-import {
-    IconUpload,
-    IconTrash,
-    IconCheck,
-    IconX,
-    IconPhoto,
-    IconDeviceFloppy,
-    IconRefresh
-} from '@tabler/icons-react'
+import { IconUpload, IconTrash, IconCheck, IconX, IconPhoto, IconDeviceFloppy, IconRefresh } from '@tabler/icons-react'
 
 // Store
 import { store } from '@/store'
-import { closeSnackbar as closeSnackbarAction, enqueueSnackbar as enqueueSnackbarAction } from '@/store/actions'
+import { enqueueSnackbar as enqueueSnackbarAction } from '@/store/actions'
 
 // Constants
 import { gridSpacing } from '@/store/constant'
@@ -63,24 +54,39 @@ const AssetCard = ({ asset, isActive, onActivate, onDeactivate, onDelete, saving
     const [imageUrl, setImageUrl] = useState(null)
     const [imageError, setImageError] = useState(false)
     const [isHovered, setIsHovered] = useState(false)
+    // Track the current blob URL in a ref so the cleanup closure always revokes
+    // the latest URL regardless of which render's state value it captured.
+    const blobUrlRef = useRef(null)
 
     useEffect(() => {
+        let cancelled = false
+
         // Load asset preview
         const loadPreview = async () => {
             try {
                 const response = await platformConfigApi.getAssetFile(asset.id)
+                if (cancelled) return
+                // Revoke any previous blob URL before creating a new one
+                if (blobUrlRef.current) {
+                    URL.revokeObjectURL(blobUrlRef.current)
+                }
                 const url = URL.createObjectURL(response.data)
+                blobUrlRef.current = url
                 setImageUrl(url)
             } catch (error) {
-                console.error('Error loading asset preview:', error)
-                setImageError(true)
+                if (!cancelled) {
+                    console.error('Error loading asset preview:', error)
+                    setImageError(true)
+                }
             }
         }
         loadPreview()
 
         return () => {
-            if (imageUrl) {
-                URL.revokeObjectURL(imageUrl)
+            cancelled = true
+            if (blobUrlRef.current) {
+                URL.revokeObjectURL(blobUrlRef.current)
+                blobUrlRef.current = null
             }
         }
     }, [asset.id])
@@ -157,9 +163,7 @@ const AssetCard = ({ asset, isActive, onActivate, onDeactivate, onDelete, saving
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    backgroundColor: theme.palette.mode === 'dark' 
-                        ? 'rgba(255,255,255,0.05)' 
-                        : 'rgba(0,0,0,0.02)',
+                    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)',
                     borderBottom: `1px solid ${theme.palette.divider}`,
                     p: 2
                 }}
@@ -207,11 +211,11 @@ const AssetCard = ({ asset, isActive, onActivate, onDeactivate, onDelete, saving
             {/* Info Section */}
             <CardContent sx={{ flexGrow: 1, p: 2, '&:last-child': { pb: 2 } }}>
                 <Tooltip title={asset.fileName} placement='top'>
-                    <Typography 
-                        variant='subtitle2' 
+                    <Typography
+                        variant='subtitle2'
                         color='text.primary'
-                        noWrap 
-                        sx={{ 
+                        noWrap
+                        sx={{
                             fontWeight: 600,
                             mb: 0.5,
                             letterSpacing: '0.01em'
@@ -220,12 +224,12 @@ const AssetCard = ({ asset, isActive, onActivate, onDeactivate, onDelete, saving
                         {asset.fileName}
                     </Typography>
                 </Tooltip>
-                
+
                 <Stack direction='row' spacing={1} alignItems='center' sx={{ mb: 1.5 }}>
-                    <Typography 
-                        variant='caption' 
+                    <Typography
+                        variant='caption'
                         color='text.secondary'
-                        sx={{ 
+                        sx={{
                             fontWeight: 500,
                             letterSpacing: '0.02em'
                         }}
@@ -234,12 +238,10 @@ const AssetCard = ({ asset, isActive, onActivate, onDeactivate, onDelete, saving
                     </Typography>
                     {asset.createdDate && (
                         <>
-                            <Typography variant='caption' color='text.disabled'>•</Typography>
-                            <Typography 
-                                variant='caption' 
-                                color='text.secondary'
-                                sx={{ letterSpacing: '0.02em' }}
-                            >
+                            <Typography variant='caption' color='text.disabled'>
+                                •
+                            </Typography>
+                            <Typography variant='caption' color='text.secondary' sx={{ letterSpacing: '0.02em' }}>
                                 {formatDate(asset.createdDate)}
                             </Typography>
                         </>
@@ -256,7 +258,7 @@ const AssetCard = ({ asset, isActive, onActivate, onDeactivate, onDelete, saving
                             onClick={() => onDeactivate(asset.id)}
                             disabled={saving}
                             startIcon={<IconX size={16} />}
-                            sx={{ 
+                            sx={{
                                 borderRadius: 1.5,
                                 textTransform: 'none',
                                 fontSize: '0.75rem',
@@ -279,7 +281,7 @@ const AssetCard = ({ asset, isActive, onActivate, onDeactivate, onDelete, saving
                                 onClick={() => onActivate(asset.id)}
                                 disabled={saving}
                                 startIcon={<IconCheck size={16} />}
-                                sx={{ 
+                                sx={{
                                     borderRadius: 1.5,
                                     textTransform: 'none',
                                     fontSize: '0.75rem',
@@ -318,6 +320,22 @@ const AssetCard = ({ asset, isActive, onActivate, onDeactivate, onDelete, saving
             </CardContent>
         </Card>
     )
+}
+
+AssetCard.propTypes = {
+    asset: PropTypes.shape({
+        id: PropTypes.any,
+        fileName: PropTypes.string,
+        fileSize: PropTypes.number,
+        createdDate: PropTypes.string
+    }).isRequired,
+    isActive: PropTypes.bool,
+    onActivate: PropTypes.func,
+    onDeactivate: PropTypes.func,
+    onDelete: PropTypes.func,
+    saving: PropTypes.bool,
+    theme: PropTypes.object.isRequired,
+    isCompact: PropTypes.bool
 }
 
 // ==============================|| ASSET MANAGER COMPONENT ||============================== //
@@ -365,7 +383,7 @@ const AssetManager = ({
     }
 
     // Filter out active asset from the "all assets" list to avoid duplication
-    const inactiveAssets = assets.filter(a => !a.isActive)
+    const inactiveAssets = assets.filter((a) => !a.isActive)
 
     return (
         <Stack spacing={4}>
@@ -385,18 +403,18 @@ const AssetManager = ({
                         justifyContent: 'center',
                         cursor: saving ? 'not-allowed' : 'pointer',
                         border: `2px dashed ${
-                            dragActive 
-                                ? theme.palette.primary.main 
+                            dragActive
+                                ? theme.palette.primary.main
                                 : theme.palette.mode === 'dark'
-                                    ? 'rgba(255, 255, 255, 0.3)'
-                                    : theme.palette.divider
+                                ? 'rgba(255, 255, 255, 0.3)'
+                                : theme.palette.divider
                         }`,
                         borderRadius: 2,
-                        backgroundColor: dragActive 
+                        backgroundColor: dragActive
                             ? theme.palette.primary.main + (theme.palette.mode === 'dark' ? '20' : '10')
-                            : theme.palette.mode === 'dark' 
-                                ? 'rgba(255,255,255,0.05)' 
-                                : 'rgba(0,0,0,0.02)',
+                            : theme.palette.mode === 'dark'
+                            ? 'rgba(255,255,255,0.05)'
+                            : 'rgba(0,0,0,0.02)',
                         transition: 'all 0.2s ease-in-out',
                         minHeight: 160,
                         '&:hover': {
@@ -409,67 +427,55 @@ const AssetManager = ({
                         }
                     }}
                 >
-                    <input
-                        type='file'
-                        hidden
-                        accept={acceptedTypes}
-                        onChange={handleFileChange}
-                        disabled={saving}
-                    />
-                    <IconUpload 
+                    <input type='file' hidden accept={acceptedTypes} onChange={handleFileChange} disabled={saving} />
+                    <IconUpload
                         className='upload-icon'
-                        size={40} 
+                        size={40}
                         color={
-                            dragActive 
-                                ? theme.palette.primary.main 
+                            dragActive
+                                ? theme.palette.primary.main
                                 : theme.palette.mode === 'dark'
-                                    ? 'rgba(255, 255, 255, 0.7)'
-                                    : theme.palette.text.secondary
+                                ? 'rgba(255, 255, 255, 0.7)'
+                                : theme.palette.text.secondary
                         }
-                        style={{ 
+                        style={{
                             marginBottom: 16,
                             transition: 'all 0.2s ease-in-out'
                         }}
                     />
-                    <Typography 
-                        variant='subtitle1' 
-                        sx={{ 
-                            fontWeight: 600, 
-                            mb: 0.5, 
+                    <Typography
+                        variant='subtitle1'
+                        sx={{
+                            fontWeight: 600,
+                            mb: 0.5,
                             textAlign: 'center',
                             letterSpacing: '0.01em',
-                            color: theme.palette.mode === 'dark'
-                                ? 'rgba(255, 255, 255, 0.95)'
-                                : theme.palette.text.primary
+                            color: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.95)' : theme.palette.text.primary
                         }}
                     >
                         {dragActive ? 'Drop your file here' : `Upload ${type === 'logo' ? 'Logo' : 'Favicon'}`}
                     </Typography>
-                    <Typography 
-                        variant='body2' 
-                        sx={{ 
+                    <Typography
+                        variant='body2'
+                        sx={{
                             textAlign: 'center',
                             fontWeight: 400,
                             letterSpacing: '0.02em',
-                            color: theme.palette.mode === 'dark'
-                                ? 'rgba(255, 255, 255, 0.7)'
-                                : theme.palette.text.secondary
+                            color: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : theme.palette.text.secondary
                         }}
                     >
                         Drag and drop or click to browse
                     </Typography>
-                    <Typography 
-                        variant='caption' 
-                        sx={{ 
-                            mt: 2, 
-                            textAlign: 'center', 
+                    <Typography
+                        variant='caption'
+                        sx={{
+                            mt: 2,
+                            textAlign: 'center',
                             maxWidth: 320,
                             lineHeight: 1.5,
                             letterSpacing: '0.02em',
                             fontWeight: 400,
-                            color: theme.palette.mode === 'dark'
-                                ? 'rgba(255, 255, 255, 0.7)'
-                                : theme.palette.text.secondary
+                            color: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : theme.palette.text.secondary
                         }}
                     >
                         {description}
@@ -490,10 +496,10 @@ const AssetManager = ({
                                 boxShadow: `0 0 8px ${theme.palette.primary.main}40`
                             }}
                         />
-                        <Typography 
-                            variant='h6' 
+                        <Typography
+                            variant='h6'
                             color='text.primary'
-                            sx={{ 
+                            sx={{
                                 fontWeight: 600,
                                 letterSpacing: '0.01em'
                             }}
@@ -529,29 +535,30 @@ const AssetManager = ({
                                 opacity: 0.6
                             }}
                         />
-                        <Typography 
-                            variant='h6' 
+                        <Typography
+                            variant='h6'
                             color='text.primary'
-                            sx={{ 
+                            sx={{
                                 fontWeight: 600,
                                 letterSpacing: '0.01em'
                             }}
                         >
-                            {activeAsset ? 'Other ' : 'All '}{type === 'logo' ? 'Logos' : 'Favicons'}
+                            {activeAsset ? 'Other ' : 'All '}
+                            {type === 'logo' ? 'Logos' : 'Favicons'}
                         </Typography>
-                        <Chip 
-                            label={inactiveAssets.length} 
-                            size='small' 
-                            sx={{ 
+                        <Chip
+                            label={inactiveAssets.length}
+                            size='small'
+                            sx={{
                                 height: 22,
                                 fontWeight: 600,
                                 backgroundColor: theme.palette.action.selected,
                                 color: theme.palette.text.primary
-                            }} 
+                            }}
                         />
                     </Stack>
                 </Stack>
-                
+
                 {inactiveAssets.length > 0 && (
                     <Grid container spacing={gridSpacing}>
                         {inactiveAssets.map((asset) => (
@@ -575,19 +582,21 @@ const AssetManager = ({
     )
 }
 
-// ==============================|| PLATFORM CONFIGURATION ||============================== //
-
-// Helper function to reset favicon to default
-const resetFavicon = () => {
-    let faviconLink = document.querySelector("link[rel*='icon']")
-    if (faviconLink) {
-        faviconLink.href = '/favicon.ico'
-    }
-    const appleTouchIcon = document.querySelector("link[rel='apple-touch-icon']")
-    if (appleTouchIcon) {
-        appleTouchIcon.href = '/logo192.png'
-    }
+AssetManager.propTypes = {
+    type: PropTypes.string,
+    assets: PropTypes.array,
+    activeAsset: PropTypes.object,
+    onUpload: PropTypes.func,
+    onActivate: PropTypes.func,
+    onDeactivate: PropTypes.func,
+    onDelete: PropTypes.func,
+    saving: PropTypes.bool,
+    theme: PropTypes.object.isRequired,
+    acceptedTypes: PropTypes.string,
+    description: PropTypes.string
 }
+
+// ==============================|| PLATFORM CONFIGURATION ||============================== //
 
 // Helper function to trigger logo update event (for components that display the logo)
 const triggerLogoUpdate = () => {
@@ -607,9 +616,8 @@ const triggerAppNameUpdate = () => {
 
 const PlatformConfiguration = () => {
     const theme = useTheme()
-    const customization = useSelector((state) => state.customization)
     const { updateDocumentTitle, updateFavicon } = useConfig()
-    const { error, setError } = useError()
+    const { error } = useError()
 
     // API hooks
     const getActiveConfigApi = useApi(platformConfigApi.getActiveConfig)
@@ -636,19 +644,24 @@ const PlatformConfiguration = () => {
     // Notification helpers
     useNotifier()
     const enqueueSnackbar = (...args) => store.dispatch(enqueueSnackbarAction(...args))
-    const closeSnackbar = (...args) => store.dispatch(closeSnackbarAction(...args))
 
     // Confirm dialog
     const { confirm } = useConfirm()
 
-    // Load initial data
+    // Load initial data — call raw API functions so all state is set atomically
+    // before setLoading(false), preventing a flash of empty fields.
     const loadData = useCallback(async () => {
         setLoading(true)
         try {
-            const [configRes, assetsRes] = await Promise.all([
-                getActiveConfigApi.request(),
-                listAssetsApi.request()
-            ])
+            const [configRes, assetsRes] = await Promise.all([platformConfigApi.getActiveConfig(), platformConfigApi.listAssets()])
+            const configData = configRes.data
+            const assetsData = assetsRes.data
+            setActiveConfig(configData)
+            setApplicationName(configData?.applicationName || '')
+            setOriginalAppName(configData?.applicationName || '')
+            setAgentPerformanceUrl(configData?.agentPerformanceUrl || '')
+            setOriginalAgentPerformanceUrl(configData?.agentPerformanceUrl || '')
+            setAssets(assetsData || [])
         } catch (error) {
             console.error('Error loading platform config:', error)
         } finally {
@@ -658,9 +671,9 @@ const PlatformConfiguration = () => {
 
     useEffect(() => {
         loadData()
-    }, [])
+    }, [loadData])
 
-    // Handle config response
+    // Handle config response — used when refreshing after a mutation via useApi hooks
     useEffect(() => {
         if (getActiveConfigApi.data) {
             setActiveConfig(getActiveConfigApi.data)
@@ -671,7 +684,7 @@ const PlatformConfiguration = () => {
         }
     }, [getActiveConfigApi.data])
 
-    // Handle assets response
+    // Handle assets response — used when refreshing after a mutation via useApi hooks
     useEffect(() => {
         if (listAssetsApi.data) {
             setAssets(listAssetsApi.data)
@@ -770,9 +783,9 @@ const PlatformConfiguration = () => {
     // Activate asset
     const handleActivateAsset = async (assetId) => {
         // Find the asset to determine its type
-        const asset = assets.find(a => a.id === assetId)
+        const asset = assets.find((a) => a.id === assetId)
         const assetType = asset?.assetType
-        
+
         setSaving(true)
         try {
             await activateAssetApi.request(assetId)
@@ -781,11 +794,8 @@ const PlatformConfiguration = () => {
                 options: { variant: 'success' }
             })
             // Refresh data
-            await Promise.all([
-                getActiveConfigApi.request(),
-                listAssetsApi.request()
-            ])
-            
+            await Promise.all([getActiveConfigApi.request(), listAssetsApi.request()])
+
             // Hot reload: Update the asset in the browser immediately
             if (assetType === 'favicon') {
                 updateFavicon(true) // Uses public route to fetch active favicon
@@ -806,9 +816,9 @@ const PlatformConfiguration = () => {
     // Deactivate asset
     const handleDeactivateAsset = async (assetId) => {
         // Find the asset to determine its type
-        const asset = assets.find(a => a.id === assetId)
+        const asset = assets.find((a) => a.id === assetId)
         const assetType = asset?.assetType
-        
+
         setSaving(true)
         try {
             await deactivateAssetApi.request(assetId)
@@ -817,14 +827,14 @@ const PlatformConfiguration = () => {
                 options: { variant: 'success' }
             })
             // Refresh data
-            await Promise.all([
-                getActiveConfigApi.request(),
-                listAssetsApi.request()
-            ])
-            
+            await Promise.all([getActiveConfigApi.request(), listAssetsApi.request()])
+
             // Hot reload: Reset to default when deactivated
             if (assetType === 'favicon') {
-                resetFavicon() // Reset to default favicon
+                // Go through ConfigContext so the localStorage cache is updated
+                // and the platformFaviconUpdated event notifies all layouts/menus.
+                updateFavicon(false)
+                triggerFaviconUpdate()
             } else if (assetType === 'logo') {
                 triggerLogoUpdate()
             }
@@ -847,6 +857,12 @@ const PlatformConfiguration = () => {
         })
 
         if (confirmResult) {
+            // Capture asset info before the deletion so we can react if the active
+            // asset is removed (the server silently deactivates it).
+            const asset = assets.find((a) => a.id === assetId)
+            const assetType = asset?.assetType
+            const wasActive = activeConfig?.activeLogo?.id === assetId || activeConfig?.activeFavicon?.id === assetId
+
             setSaving(true)
             try {
                 await deleteAssetApi.request(assetId)
@@ -856,6 +872,24 @@ const PlatformConfiguration = () => {
                 })
                 // Refresh assets
                 await listAssetsApi.request()
+
+                // If the deleted asset was the currently-active one, clear the
+                // stale localStorage cache and notify all layouts / menus so they
+                // revert to the default favicon / logo immediately without a full
+                // page reload.
+                if (wasActive) {
+                    if (assetType === 'favicon') {
+                        updateFavicon(false)
+                        triggerFaviconUpdate()
+                    } else if (assetType === 'logo') {
+                        try {
+                            localStorage.removeItem('platform_logo_active')
+                        } catch (_) {
+                            // intentionally empty
+                        }
+                        triggerLogoUpdate()
+                    }
+                }
             } catch (error) {
                 enqueueSnackbar({
                     message: error.message || 'Failed to delete asset',
@@ -868,8 +902,8 @@ const PlatformConfiguration = () => {
     }
 
     // Filter assets by type
-    const logoAssets = assets.filter(a => a.assetType === 'logo')
-    const faviconAssets = assets.filter(a => a.assetType === 'favicon')
+    const logoAssets = assets.filter((a) => a.assetType === 'logo')
+    const faviconAssets = assets.filter((a) => a.assetType === 'favicon')
 
     return (
         <MainCard>
@@ -877,25 +911,18 @@ const PlatformConfiguration = () => {
                 <ErrorBoundary error={error} />
             ) : (
                 <Stack flexDirection='column' sx={{ gap: 3 }}>
-                    <ViewHeader
-                        title='Platform Configuration'
-                        description='Customize your application branding - name, logo, and favicon'
-                    >
+                    <ViewHeader title='Platform Configuration' description='Customize your application branding - name, logo, and favicon'>
                         <Tooltip title='Refresh'>
-                            <IconButton 
-                                onClick={loadData} 
+                            <IconButton
+                                onClick={loadData}
                                 disabled={isLoading || saving}
                                 sx={{
                                     border: `1px solid ${
-                                        theme.palette.mode === 'dark'
-                                            ? 'rgba(255, 255, 255, 0.23)'
-                                            : theme.palette.divider
+                                        theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.23)' : theme.palette.divider
                                     }`,
                                     borderRadius: 1.5,
                                     transition: 'all 0.2s ease-in-out',
-                                    color: theme.palette.mode === 'dark'
-                                        ? 'rgba(255, 255, 255, 0.7)'
-                                        : theme.palette.text.secondary,
+                                    color: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : theme.palette.text.secondary,
                                     '&:hover': {
                                         borderColor: theme.palette.primary.main,
                                         backgroundColor: theme.palette.primary.main + (theme.palette.mode === 'dark' ? '15' : '08'),
@@ -906,12 +933,8 @@ const PlatformConfiguration = () => {
                                         }
                                     },
                                     '&.Mui-disabled': {
-                                        borderColor: theme.palette.mode === 'dark'
-                                            ? 'rgba(255, 255, 255, 0.12)'
-                                            : theme.palette.divider,
-                                        color: theme.palette.mode === 'dark'
-                                            ? 'rgba(255, 255, 255, 0.3)'
-                                            : theme.palette.action.disabled
+                                        borderColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : theme.palette.divider,
+                                        color: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.3)' : theme.palette.action.disabled
                                     },
                                     '& svg': {
                                         transition: 'transform 0.3s ease-in-out'
@@ -932,8 +955,8 @@ const PlatformConfiguration = () => {
 
                     {!isLoading && (
                         <>
-                            <Tabs 
-                                value={tabValue} 
+                            <Tabs
+                                value={tabValue}
                                 onChange={handleTabChange}
                                 sx={{
                                     '& .MuiTab-root': {
@@ -966,16 +989,17 @@ const PlatformConfiguration = () => {
                             {/* Application Name Tab */}
                             {tabValue === 0 && (
                                 <Box>
-                                    <Typography 
-                                        variant='body2' 
-                                        color='text.secondary' 
-                                        sx={{ 
+                                    <Typography
+                                        variant='body2'
+                                        color='text.secondary'
+                                        sx={{
                                             mb: 2,
                                             lineHeight: 1.6,
                                             letterSpacing: '0.01em'
                                         }}
                                     >
-                                        Set the name of your application. This will be displayed in the browser tab and throughout the application.
+                                        Set the name of your application. This will be displayed in the browser tab and throughout the
+                                        application.
                                     </Typography>
                                     <Stack direction='row' spacing={2} alignItems='center'>
                                         <TextField
@@ -984,20 +1008,17 @@ const PlatformConfiguration = () => {
                                             onChange={(e) => setApplicationName(e.target.value)}
                                             variant='outlined'
                                             size='small'
-                                            sx={{ 
+                                            sx={{
                                                 width: 300,
                                                 '& .MuiOutlinedInput-root': {
-                                                    backgroundColor: theme.palette.mode === 'dark' 
-                                                        ? 'rgba(255, 255, 255, 0.05)' 
-                                                        : 'transparent',
+                                                    backgroundColor:
+                                                        theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'transparent',
                                                     '&:hover fieldset': {
                                                         borderColor: theme.palette.primary.main
                                                     }
                                                 },
                                                 '& .MuiInputLabel-root': {
-                                                    color: theme.palette.mode === 'dark'
-                                                        ? 'rgba(255, 255, 255, 0.7)'
-                                                        : undefined
+                                                    color: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : undefined
                                                 }
                                             }}
                                         />
@@ -1016,9 +1037,7 @@ const PlatformConfiguration = () => {
                                                     boxShadow: theme.shadows[6]
                                                 },
                                                 '&.Mui-disabled': {
-                                                    backgroundColor: theme.palette.mode === 'dark'
-                                                        ? 'rgba(255, 255, 255, 0.12)'
-                                                        : undefined
+                                                    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : undefined
                                                 }
                                             }}
                                         >
@@ -1026,9 +1045,9 @@ const PlatformConfiguration = () => {
                                         </Button>
                                     </Stack>
                                     {applicationName !== originalAppName && (
-                                        <Alert 
-                                            severity='info' 
-                                            sx={{ 
+                                        <Alert
+                                            severity='info'
+                                            sx={{
                                                 mt: 2,
                                                 '& .MuiAlert-message': {
                                                     fontSize: '0.875rem',
@@ -1045,16 +1064,17 @@ const PlatformConfiguration = () => {
                             {/* Agent Performance URL Tab */}
                             {tabValue === 1 && (
                                 <Box>
-                                    <Typography 
-                                        variant='body2' 
-                                        color='text.secondary' 
-                                        sx={{ 
+                                    <Typography
+                                        variant='body2'
+                                        color='text.secondary'
+                                        sx={{
                                             mb: 2,
                                             lineHeight: 1.6,
                                             letterSpacing: '0.01em'
                                         }}
                                     >
-                                        Set the Agent Performance URL for agent performance and monitoring. This will be used to track and analyze your AI agent's performance.
+                                        Set the Agent Performance URL for agent performance and monitoring. This will be used to track and
+                                        analyze your AI agent&apos;s performance.
                                     </Typography>
                                     <Stack direction='row' spacing={2} alignItems='center'>
                                         <TextField
@@ -1064,20 +1084,17 @@ const PlatformConfiguration = () => {
                                             variant='outlined'
                                             size='small'
                                             placeholder='https://example.com/agent-performance/'
-                                            sx={{ 
+                                            sx={{
                                                 width: 400,
                                                 '& .MuiOutlinedInput-root': {
-                                                    backgroundColor: theme.palette.mode === 'dark' 
-                                                        ? 'rgba(255, 255, 255, 0.05)' 
-                                                        : 'transparent',
+                                                    backgroundColor:
+                                                        theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'transparent',
                                                     '&:hover fieldset': {
                                                         borderColor: theme.palette.primary.main
                                                     }
                                                 },
                                                 '& .MuiInputLabel-root': {
-                                                    color: theme.palette.mode === 'dark'
-                                                        ? 'rgba(255, 255, 255, 0.7)'
-                                                        : undefined
+                                                    color: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : undefined
                                                 }
                                             }}
                                         />
@@ -1096,9 +1113,7 @@ const PlatformConfiguration = () => {
                                                     boxShadow: theme.shadows[6]
                                                 },
                                                 '&.Mui-disabled': {
-                                                    backgroundColor: theme.palette.mode === 'dark'
-                                                        ? 'rgba(255, 255, 255, 0.12)'
-                                                        : undefined
+                                                    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : undefined
                                                 }
                                             }}
                                         >
@@ -1106,9 +1121,9 @@ const PlatformConfiguration = () => {
                                         </Button>
                                     </Stack>
                                     {agentPerformanceUrl !== originalAgentPerformanceUrl && (
-                                        <Alert 
-                                            severity='info' 
-                                            sx={{ 
+                                        <Alert
+                                            severity='info'
+                                            sx={{
                                                 mt: 2,
                                                 '& .MuiAlert-message': {
                                                     fontSize: '0.875rem',
