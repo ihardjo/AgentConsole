@@ -5,6 +5,7 @@ knowledge graph with workspace isolation, RBAC, and provenance tracking.
 """
 
 from federated_rag.access_control import AccessControlService, AccessLevel
+from federated_rag.api import create_app
 from federated_rag.acl_filter import build_context_string, filter_query_results
 from federated_rag.connector_base import BaseConnector
 from federated_rag.connector_file import FileConnector
@@ -49,6 +50,7 @@ __all__ = [
     "ChangeType",
     "ColumnSchema",
     "ConnectorType",
+    "create_app",
     "DataSourceRegistration",
     "DataSourceRegistry",
     "FederatedLightRAG",
