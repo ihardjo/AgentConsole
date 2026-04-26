@@ -7,6 +7,7 @@ knowledge graph with workspace isolation, RBAC, and provenance tracking.
 from federated_rag.acl_filter import build_context_string, filter_query_results
 from federated_rag.connector_base import BaseConnector
 from federated_rag.connector_file import FileConnector
+from federated_rag.connector_postgres import PostgreSQLConnector
 from federated_rag.crypto import decrypt_config, encrypt_config
 from federated_rag.federated_lightrag import FederatedLightRAG, LightRAGProtocol
 from federated_rag.models import (
@@ -45,6 +46,7 @@ __all__ = [
     "DataSourceRegistry",
     "FederatedLightRAG",
     "FileConnector",
+    "PostgreSQLConnector",
     "InformationSchema",
     "LightRAGProtocol",
     "SourceStatus",
