@@ -11,6 +11,8 @@ from federated_rag.connector_file import FileConnector
 from federated_rag.connector_mongodb import MongoDBConnector
 from federated_rag.connector_mysql import MySQLConnector
 from federated_rag.connector_postgres import PostgreSQLConnector
+from federated_rag.connector_rest_api import RESTAPIConnector
+from federated_rag.connector_s3 import S3Connector
 from federated_rag.crypto import decrypt_config, encrypt_config
 from federated_rag.federated_lightrag import FederatedLightRAG, LightRAGProtocol
 from federated_rag.models import (
@@ -54,6 +56,8 @@ __all__ = [
     "MongoDBConnector",
     "MySQLConnector",
     "PostgreSQLConnector",
+    "RESTAPIConnector",
+    "S3Connector",
     "InformationSchema",
     "LightRAGProtocol",
     "SourceStatus",
