@@ -4,6 +4,7 @@ Connects client-owned warehouses and vector DBs into a unified
 knowledge graph with workspace isolation, RBAC, and provenance tracking.
 """
 
+from federated_rag.access_control import AccessControlService, AccessLevel
 from federated_rag.acl_filter import build_context_string, filter_query_results
 from federated_rag.connector_base import BaseConnector
 from federated_rag.connector_file import FileConnector
@@ -37,6 +38,8 @@ from federated_rag.workspace_manager import (
 )
 
 __all__ = [
+    "AccessControlService",
+    "AccessLevel",
     "BaseConnector",
     "ChangeEvent",
     "ChangeType",
