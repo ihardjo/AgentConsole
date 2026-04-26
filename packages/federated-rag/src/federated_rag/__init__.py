@@ -18,6 +18,13 @@ from federated_rag.models import (
     SyncMode,
     TableSchema,
 )
+from federated_rag.source_registry import DataSourceRegistry
+from federated_rag.workspace_manager import (
+    Workspace,
+    WorkspaceManager,
+    WorkspaceMembership,
+    WorkspaceSettings,
+)
 
 __all__ = [
     "BaseConnector",
@@ -26,11 +33,16 @@ __all__ = [
     "ColumnSchema",
     "ConnectorType",
     "DataSourceRegistration",
+    "DataSourceRegistry",
     "FileConnector",
     "InformationSchema",
     "SourceStatus",
     "SyncMode",
     "TableSchema",
+    "Workspace",
+    "WorkspaceManager",
+    "WorkspaceMembership",
+    "WorkspaceSettings",
     "decrypt_config",
     "encrypt_config",
 ]
