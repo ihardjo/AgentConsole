@@ -54,6 +54,7 @@ interface InternalWorkflowState {
     receivedSignals: Map<string, any>
     collectedSignals: Map<string, Array<{ payload: any; receivedAt: string }>>
     pendingTasks: Map<string, PendingTask>
+    loopIterations: Map<string, number> // Track loop iteration counts by loop node ID
     workflowStatus: {
         status: 'running' | 'completed' | 'failed'
         currentNodeId: string | null
@@ -174,6 +175,7 @@ export async function durableWorkflowExecutor(params: DurableWorkflowInput): Pro
     const receivedSignals = new Map<string, any>()
     const collectedSignals = new Map<string, Array<{ payload: any; receivedAt: string }>>()
     const pendingTasks = new Map<string, PendingTask>()
+    const loopIterations = new Map<string, number>() // Track loop iterations per loop node
     const workflowStatus: { status: 'running' | 'completed' | 'failed'; currentNodeId: string | null } = {
         status: 'running',
         currentNodeId: null
@@ -184,6 +186,7 @@ export async function durableWorkflowExecutor(params: DurableWorkflowInput): Pro
         receivedSignals,
         collectedSignals,
         pendingTasks,
+        loopIterations,
         workflowStatus
     }
 
@@ -440,6 +443,94 @@ async function executeNode(
                 timeout: data.timeout ? parseDuration(data.timeout) : 30000
             })
 
+        case 'temporalLoop': {
+            // Loop node - tracks iteration count and determines whether to continue looping
+            const { loopIterations } = state
+            const maxIterations = data.maxIterations || 3
+            const loopToNodeId = data.loopToNodeId
+            const loopToNodeLabel = data.loopToNodeLabel || loopToNodeId
+
+            // Increment iteration counter for this loop node
+            const currentIteration = (loopIterations.get(id) || 0) + 1
+            loopIterations.set(id, currentIteration)
+
+            // Determine whether to continue looping
+            const continueLoop = currentIteration < maxIterations
+            const exitReason = continueLoop ? null : 'max_iterations_reached'
+
+            return {
+                iteration: currentIteration,
+                maxIterations,
+                loopedTo: loopToNodeId,
+                loopedToLabel: loopToNodeLabel,
+                continueLoop,
+                exitReason
+            }
+        }
+
+        case 'temporalNotification': {
+            // Notification node - send via email, SMS, and/or webhook
+            const emailEnabled = data.emailEnabled || false
+            const smsEnabled = data.smsEnabled || false
+            const webhookEnabled = data.webhookEnabled || false
+
+            return await acts.sendNotification({
+                emailEnabled,
+                emailTo: emailEnabled ? resolveTemplate(data.emailTo || '', context) : undefined,
+                emailSubject: emailEnabled ? resolveTemplate(data.emailSubject || '', context) : undefined,
+                emailBody: emailEnabled ? resolveTemplate(data.emailBody || '', context) : undefined,
+                smsEnabled,
+                smsTo: smsEnabled ? resolveTemplate(data.smsTo || '', context) : undefined,
+                smsBody: smsEnabled ? resolveTemplate(data.smsBody || '', context) : undefined,
+                webhookEnabled,
+                webhookUrl: webhookEnabled ? resolveTemplate(data.webhookUrl || '', context) : undefined,
+                webhookMethod: data.webhookMethod || 'POST',
+                webhookHeaders: data.webhookHeaders,
+                webhookBody: webhookEnabled ? resolveTemplate(data.webhookBody || '', context) : undefined
+            })
+        }
+
+        case 'temporalParallel': {
+            // Parallel node - fork/join gateway
+            // This node type is handled specially in executeWorkflowGraph
+            // Here we just return metadata about the parallel execution
+            const mode = data.mode || 'fork'
+            const branchCount = data.branchCount || 2
+
+            return {
+                mode,
+                branchCount,
+                completedAt: new Date().toISOString()
+            }
+        }
+
+        case 'temporalSubWorkflow': {
+            // SubWorkflow node - execute another workflow as child
+            const workflowId = data.workflowId
+            const waitForCompletion = data.waitForCompletion !== false
+            const timeout = data.timeout ? parseDuration(data.timeout) : undefined
+
+            // Parse and resolve input
+            let subWorkflowInput: Record<string, any> = {}
+            if (data.input) {
+                try {
+                    const resolvedInput = resolveTemplate(data.input, context)
+                    subWorkflowInput = typeof resolvedInput === 'string' ? JSON.parse(resolvedInput) : resolvedInput
+                } catch {
+                    // If parsing fails, treat as empty input
+                    subWorkflowInput = {}
+                }
+            }
+
+            return await acts.executeSubWorkflow({
+                workflowId,
+                workspaceId: context.workspaceId,
+                input: subWorkflowInput,
+                waitForCompletion,
+                timeout
+            })
+        }
+
         default:
             console.warn(`Unknown node type: ${type}`)
             return { skipped: true, reason: `Unknown node type: ${type}` }
@@ -518,6 +609,29 @@ async function executeWorkflowGraph(
 
     const result = await executePromise
 
+    // Handle Loop node - if continueLoop is true, redirect execution to target node
+    const isLoopNode = startNode.type === 'temporalLoop'
+    if (isLoopNode && result?.continueLoop && result?.loopedTo) {
+        const targetNode = nodes.find((n) => n.id === result.loopedTo)
+        if (targetNode) {
+            // Clear executed status for nodes in the loop path (target to this loop node)
+            // This allows them to re-execute on the next iteration
+            // Note: We do NOT clear context - accumulated state is preserved
+            clearLoopPath(result.loopedTo, startNode.id, nodes, edges, executed, executing)
+            executed.delete(startNode.id)
+            executing.delete(startNode.id)
+
+            await executeWorkflowGraph(targetNode, nodes, edges, context, state, executed, executing)
+        }
+        // Loop node has no downstream - it redirects, so return here
+        return
+    }
+
+    // If loop node but not continuing, just end this branch
+    if (isLoopNode) {
+        return
+    }
+
     // Determine next nodes to execute
     const isConditionNode = startNode.type === 'condition' || startNode.type === 'temporalCondition'
     const conditionResult = isConditionNode ? result?.result : undefined
@@ -569,4 +683,67 @@ function parseDuration(duration: string): number {
         default:
             return num
     }
+}
+
+/**
+ * Clears the executed status for nodes in the loop path.
+ * This allows nodes between the target and loop node to re-execute.
+ * Note: We do NOT clear context - accumulated state is preserved across iterations.
+ *
+ * Uses BFS from target node forward, stopping at the loop node.
+ */
+function clearLoopPath(targetNodeId: string, loopNodeId: string, nodes: FlowNode[], edges: FlowEdge[], executed: Set<string>, executing: Map<string, Promise<any>>): void {
+    // Find all nodes in the path from target to loop node (inclusive of target, exclusive of loop)
+    const nodesInPath = findNodesInPath(targetNodeId, loopNodeId, edges)
+
+    // Clear executed and executing status for nodes in the path
+    for (const nodeId of nodesInPath) {
+        executed.delete(nodeId)
+        executing.delete(nodeId)
+    }
+}
+
+/**
+ * Finds all nodes in the path from startNodeId to endNodeId using BFS.
+ * Returns node IDs that are on any path from start to end.
+ */
+function findNodesInPath(startNodeId: string, endNodeId: string, edges: FlowEdge[]): Set<string> {
+    const nodesInPath = new Set<string>()
+
+    // Build adjacency list (forward direction)
+    const outgoingEdges: Record<string, string[]> = {}
+    for (const edge of edges) {
+        if (!outgoingEdges[edge.source]) {
+            outgoingEdges[edge.source] = []
+        }
+        outgoingEdges[edge.source].push(edge.target)
+    }
+
+    // BFS from start, collecting all nodes until we reach end
+    const queue = [startNodeId]
+    const visited = new Set<string>()
+
+    while (queue.length > 0) {
+        const current = queue.shift()!
+
+        if (visited.has(current)) continue
+        visited.add(current)
+
+        // Don't include the loop node itself in the path
+        if (current !== endNodeId) {
+            nodesInPath.add(current)
+        }
+
+        // Stop exploring beyond the end node
+        if (current === endNodeId) continue
+
+        const nextNodes = outgoingEdges[current] || []
+        for (const next of nextNodes) {
+            if (!visited.has(next)) {
+                queue.push(next)
+            }
+        }
+    }
+
+    return nodesInPath
 }
