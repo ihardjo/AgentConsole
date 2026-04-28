@@ -77,9 +77,10 @@ const reinventionDashboard = {
                     id: 'reinvention-processes',
                     title: 'Reinvention Processes',
                     type: 'item',
-                    url: '/coming-soon',
+                    url: '/temporalflows',
                     icon: icons.IconHierarchy,
                     breadcrumbs: true,
+                    permission: 'temporalflows:view',
                     alwaysShow: true
                 },
                 {
