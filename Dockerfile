@@ -25,6 +25,10 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 ENV NODE_OPTIONS=--max-old-space-size=8192
 
+# Build-time argument for Temporal Web UI URL (Vite requires this at build time)
+ARG VITE_TEMPORAL_WEB_UI_URL=http://localhost:8080
+ENV VITE_TEMPORAL_WEB_UI_URL=$VITE_TEMPORAL_WEB_UI_URL
+
 WORKDIR /usr/src/flowise
 
 # Copy app source

@@ -15,7 +15,11 @@ import {
     IconGitBranch,
     IconWorldWww,
     IconUserCheck,
-    IconInbox
+    IconInbox,
+    IconRepeat,
+    IconBell,
+    IconGitFork,
+    IconSubtask
 } from '@tabler/icons-react'
 
 const drawerWidth = 280
@@ -115,6 +119,64 @@ const TEMPORAL_NODES = [
             method: 'GET',
             headers: {},
             body: ''
+        }
+    },
+    {
+        type: 'temporalLoop',
+        label: 'Loop',
+        description: 'Loop back to a previous node',
+        icon: IconRepeat,
+        color: '#795548',
+        defaultData: {
+            loopToNodeId: '',
+            loopToNodeLabel: '',
+            maxIterations: 3
+        }
+    },
+    {
+        type: 'temporalNotification',
+        label: 'Notification',
+        description: 'Send alerts via email, SMS, or webhook',
+        icon: IconBell,
+        color: '#E91E63',
+        defaultData: {
+            emailEnabled: false,
+            emailTo: '',
+            emailSubject: '',
+            emailBody: '',
+            smsEnabled: false,
+            smsTo: '',
+            smsBody: '',
+            webhookEnabled: false,
+            webhookUrl: '',
+            webhookMethod: 'POST',
+            webhookHeaders: {},
+            webhookBody: ''
+        }
+    },
+    {
+        type: 'temporalParallel',
+        label: 'Parallel',
+        description: 'Fork/Join for concurrent execution',
+        icon: IconGitFork,
+        color: '#673AB7',
+        defaultData: {
+            mode: 'fork',
+            branchCount: 2
+        }
+    },
+    {
+        type: 'temporalSubWorkflow',
+        label: 'SubWorkflow',
+        description: 'Execute another workflow as child',
+        icon: IconSubtask,
+        color: '#009688',
+        defaultData: {
+            workflowId: '',
+            workflowName: '',
+            input: '{}',
+            waitForCompletion: true,
+            timeout: ''
         }
     }
 ]

@@ -24,6 +24,10 @@ import TemporalHumanTaskNode from './nodes/HumanTaskNode'
 import TemporalCollectSignalsNode from './nodes/CollectSignalsNode'
 import TemporalConditionNode from './nodes/ConditionNode'
 import TemporalHTTPRequestNode from './nodes/HTTPRequestNode'
+import TemporalLoopNode from './nodes/LoopNode'
+import TemporalNotificationNode from './nodes/NotificationNode'
+import TemporalParallelNode from './nodes/ParallelNode'
+import TemporalSubWorkflowNode from './nodes/SubWorkflowNode'
 import TemporalEdge from './TemporalEdge'
 import AddTemporalNodes from './AddTemporalNodes'
 import TemporalNodeConfigDialog from './TemporalNodeConfigDialog'
@@ -57,7 +61,11 @@ const nodeTypes = {
     temporalHumanTask: TemporalHumanTaskNode,
     temporalCollectSignals: TemporalCollectSignalsNode,
     temporalCondition: TemporalConditionNode,
-    temporalHTTPRequest: TemporalHTTPRequestNode
+    temporalHTTPRequest: TemporalHTTPRequestNode,
+    temporalLoop: TemporalLoopNode,
+    temporalNotification: TemporalNotificationNode,
+    temporalParallel: TemporalParallelNode,
+    temporalSubWorkflow: TemporalSubWorkflowNode
 }
 
 const edgeTypes = {
@@ -145,11 +153,14 @@ const TemporalCanvas = () => {
             if (sourceNode.type === 'temporalCondition') {
                 edgeLabel = params.sourceHandle?.includes('true') ? 'True' : 'False'
             }
+            // Mark edges TO Loop nodes or FROM Loop nodes as loop edges
+            const isLoopEdge = sourceNode.type === 'temporalLoop' || targetNode.type === 'temporalLoop'
             const newEdge = {
                 ...params,
                 type: 'temporal',
                 data: {
-                    edgeLabel
+                    edgeLabel,
+                    isLoopEdge
                 },
                 id: `${params.source}-${params.sourceHandle}-${params.target}-${params.targetHandle}`
             }
@@ -193,6 +204,51 @@ const TemporalCanvas = () => {
     const handleSaveFlow = async () => {
         if (!reactFlowInstance) return
         const rfInstanceObject = reactFlowInstance.toObject()
+
+        // Validate Loop nodes before saving
+        const loopNodes = rfInstanceObject.nodes.filter((n) => n.type === 'temporalLoop')
+        for (const loopNode of loopNodes) {
+            const { loopToNodeId, label } = loopNode.data || {}
+            const loopLabel = label || loopNode.id
+
+            // Check that target node is selected
+            if (!loopToNodeId) {
+                enqueueSnackbar({
+                    message: `Loop node "${loopLabel}" requires a target node. Double-click to configure.`,
+                    options: {
+                        key: new Date().getTime() + Math.random(),
+                        variant: 'error',
+                        persist: true,
+                        action: (key) => (
+                            <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
+                                <IconX />
+                            </Button>
+                        )
+                    }
+                })
+                return
+            }
+
+            // Check that target node exists
+            const targetExists = rfInstanceObject.nodes.some((n) => n.id === loopToNodeId)
+            if (!targetExists) {
+                enqueueSnackbar({
+                    message: `Loop node "${loopLabel}" references a deleted node. Please reconfigure.`,
+                    options: {
+                        key: new Date().getTime() + Math.random(),
+                        variant: 'error',
+                        persist: true,
+                        action: (key) => (
+                            <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
+                                <IconX />
+                            </Button>
+                        )
+                    }
+                })
+                return
+            }
+        }
+
         const flowData = JSON.stringify(rfInstanceObject)
         try {
             if (!workflow?.id) {
@@ -389,7 +445,8 @@ const TemporalCanvas = () => {
     }
 
     const handleOpenTemporalUI = () => {
-        const temporalWebUIUrl = window.TEMPORAL_WEB_UI_URL || 'http://localhost:8233'
+        // Use Vite env variable (set at build time), fallback to localhost
+        const temporalWebUIUrl = import.meta.env.VITE_TEMPORAL_WEB_UI_URL || 'http://localhost:8080'
         window.open(temporalWebUIUrl, '_blank')
     }
 

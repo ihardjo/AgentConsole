@@ -3,8 +3,19 @@ import { FlowNode, FlowEdge } from '../activities/fetchFlowDefinition'
 /**
  * Performs topological sort on workflow nodes based on edges.
  * Returns nodes in execution order (respecting dependencies).
+ *
+ * Note: Loop nodes create intentional back-edges (loop -> upstream node).
+ * We filter out edges TO loop nodes before cycle detection, as these
+ * back-edges are expected and handled specially during execution.
  */
 export function topologicalSort(nodes: FlowNode[], edges: FlowEdge[]): FlowNode[] {
+    // Build set of loop node IDs to identify intentional back-edges
+    const loopNodeIds = new Set(nodes.filter((n) => n.type === 'temporalLoop').map((n) => n.id))
+
+    // Filter out edges TO loop nodes (these are intentional back-edges)
+    // Loop nodes only have input edges, no output edges
+    const filteredEdges = edges.filter((e) => !loopNodeIds.has(e.target))
+
     // Build adjacency list and in-degree map
     const adjacencyList = new Map<string, string[]>()
     const inDegree = new Map<string, number>()
@@ -15,8 +26,8 @@ export function topologicalSort(nodes: FlowNode[], edges: FlowEdge[]): FlowNode[
         inDegree.set(node.id, 0)
     }
 
-    // Build graph from edges
-    for (const edge of edges) {
+    // Build graph from filtered edges (excluding back-edges to loop nodes)
+    for (const edge of filteredEdges) {
         const targets = adjacencyList.get(edge.source) || []
         targets.push(edge.target)
         adjacencyList.set(edge.source, targets)
@@ -50,7 +61,7 @@ export function topologicalSort(nodes: FlowNode[], edges: FlowEdge[]): FlowNode[
         }
     }
 
-    // Check for cycles
+    // Check for cycles (excluding intentional loop back-edges)
     if (sortedIds.length !== nodes.length) {
         throw new Error('Workflow contains a cycle - cannot determine execution order')
     }

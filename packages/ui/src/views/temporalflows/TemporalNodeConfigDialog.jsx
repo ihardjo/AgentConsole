@@ -18,7 +18,6 @@ import {
     IconButton,
     ToggleButtonGroup,
     ToggleButton,
-    Chip,
     Alert,
     Checkbox,
     FormControlLabel,
@@ -26,7 +25,19 @@ import {
 } from '@mui/material'
 
 // icons
-import { IconX, IconPlayerPlay, IconClock, IconPlus, IconTrash } from '@tabler/icons-react'
+import {
+    IconX,
+    IconPlayerPlay,
+    IconClock,
+    IconPlus,
+    IconTrash,
+    IconRepeat,
+    IconMail,
+    IconMessage,
+    IconWebhook,
+    IconGitFork,
+    IconGitMerge
+} from '@tabler/icons-react'
 
 // components
 import TemporalTemplateInput from './TemporalTemplateInput'
@@ -89,6 +100,42 @@ const TemporalNodeConfigDialog = ({ open, onClose, dialogProps, onSave }) => {
         const duplicate = currentVars.some((v, i) => i !== index && v.name === name)
         if (duplicate) return 'Name must be unique'
         return null
+    }
+
+    // Helper to find all upstream nodes (nodes that can reach the current node)
+    // Used for Loop node target dropdown - can only loop back to upstream nodes
+    const getUpstreamNodes = (nodeId) => {
+        if (!nodes.length || !edges.length) return []
+
+        // Build adjacency list (reverse direction - from target to sources)
+        const incomingEdges = {}
+        edges.forEach((edge) => {
+            if (!incomingEdges[edge.target]) {
+                incomingEdges[edge.target] = []
+            }
+            incomingEdges[edge.target].push(edge.source)
+        })
+
+        // BFS to find all upstream nodes
+        const visited = new Set()
+        const queue = [nodeId]
+        const upstream = []
+
+        while (queue.length > 0) {
+            const current = queue.shift()
+            const sources = incomingEdges[current] || []
+
+            for (const source of sources) {
+                if (!visited.has(source)) {
+                    visited.add(source)
+                    upstream.push(source)
+                    queue.push(source)
+                }
+            }
+        }
+
+        // Return node objects (excluding Start node - can't loop to start)
+        return nodes.filter((n) => upstream.includes(n.id) && n.type !== 'temporalStart')
     }
 
     const renderFields = () => {
@@ -547,6 +594,378 @@ const TemporalNodeConfigDialog = ({ open, onClose, dialogProps, onSave }) => {
                         />
                     </Box>
                 )
+
+            case 'temporalLoop': {
+                const upstreamNodes = getUpstreamNodes(node?.id)
+                return (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <TextField
+                            label='Label'
+                            fullWidth
+                            value={formData.label || ''}
+                            onChange={(e) => handleChange('label', e.target.value)}
+                        />
+                        <FormControl fullWidth error={!formData.loopToNodeId}>
+                            <InputLabel>Loop Back To</InputLabel>
+                            <Select
+                                value={formData.loopToNodeId || ''}
+                                label='Loop Back To'
+                                onChange={(e) => {
+                                    const selectedNode = nodes.find((n) => n.id === e.target.value)
+                                    handleChange('loopToNodeId', e.target.value)
+                                    handleChange('loopToNodeLabel', selectedNode?.data?.label || selectedNode?.type || '')
+                                }}
+                            >
+                                {upstreamNodes.length === 0 ? (
+                                    <MenuItem disabled>
+                                        <em>No upstream nodes available</em>
+                                    </MenuItem>
+                                ) : (
+                                    upstreamNodes.map((n) => (
+                                        <MenuItem key={n.id} value={n.id}>
+                                            {n.data?.label || n.type} ({n.type.replace('temporal', '')})
+                                        </MenuItem>
+                                    ))
+                                )}
+                            </Select>
+                        </FormControl>
+                        {upstreamNodes.length === 0 && (
+                            <Alert severity='warning'>
+                                Connect this Loop node to the workflow first. The dropdown will show nodes upstream of this Loop node.
+                            </Alert>
+                        )}
+                        <TextField
+                            label='Max Iterations'
+                            fullWidth
+                            type='number'
+                            value={formData.maxIterations || 3}
+                            onChange={(e) => handleChange('maxIterations', Math.max(1, parseInt(e.target.value, 10) || 1))}
+                            inputProps={{ min: 1 }}
+                            helperText='Maximum number of loop iterations (safety limit)'
+                        />
+                        <Alert severity='info' icon={<IconRepeat size={20} />}>
+                            The Loop node always loops back unconditionally. For conditional looping, place a <strong>Condition</strong>{' '}
+                            node before this Loop node and connect the &quot;false&quot; branch elsewhere.
+                        </Alert>
+                    </Box>
+                )
+            }
+
+            case 'temporalNotification':
+                return (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <TextField
+                            label='Label'
+                            fullWidth
+                            value={formData.label || ''}
+                            onChange={(e) => handleChange('label', e.target.value)}
+                        />
+
+                        {/* Email Channel */}
+                        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 2 }}>
+                            <FormControlLabel
+                                control={
+                                    <Checkbox
+                                        checked={formData.emailEnabled || false}
+                                        onChange={(e) => handleChange('emailEnabled', e.target.checked)}
+                                    />
+                                }
+                                label={
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <IconMail size={18} />
+                                        <Typography fontWeight={500}>Email</Typography>
+                                    </Box>
+                                }
+                            />
+                            {formData.emailEnabled && (
+                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1.5, pl: 4 }}>
+                                    <TemporalTemplateInput
+                                        label='To'
+                                        value={formData.emailTo || ''}
+                                        onChange={(value) => handleChange('emailTo', value)}
+                                        placeholder='recipient@example.com'
+                                        nodes={nodes}
+                                        edges={edges}
+                                        nodeId={node?.id}
+                                    />
+                                    <TemporalTemplateInput
+                                        label='Subject'
+                                        value={formData.emailSubject || ''}
+                                        onChange={(value) => handleChange('emailSubject', value)}
+                                        placeholder='Alert: {{input.alertType}}'
+                                        nodes={nodes}
+                                        edges={edges}
+                                        nodeId={node?.id}
+                                    />
+                                    <TemporalTemplateInput
+                                        label='Body'
+                                        value={formData.emailBody || ''}
+                                        onChange={(value) => handleChange('emailBody', value)}
+                                        placeholder='Notification body with {{variables}}'
+                                        multiline
+                                        rows={3}
+                                        nodes={nodes}
+                                        edges={edges}
+                                        nodeId={node?.id}
+                                    />
+                                </Box>
+                            )}
+                        </Box>
+
+                        {/* SMS Channel */}
+                        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 2 }}>
+                            <FormControlLabel
+                                control={
+                                    <Checkbox
+                                        checked={formData.smsEnabled || false}
+                                        onChange={(e) => handleChange('smsEnabled', e.target.checked)}
+                                    />
+                                }
+                                label={
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <IconMessage size={18} />
+                                        <Typography fontWeight={500}>SMS</Typography>
+                                    </Box>
+                                }
+                            />
+                            {formData.smsEnabled && (
+                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1.5, pl: 4 }}>
+                                    <TemporalTemplateInput
+                                        label='To'
+                                        value={formData.smsTo || ''}
+                                        onChange={(value) => handleChange('smsTo', value)}
+                                        placeholder='+1234567890'
+                                        nodes={nodes}
+                                        edges={edges}
+                                        nodeId={node?.id}
+                                    />
+                                    <TemporalTemplateInput
+                                        label='Message'
+                                        value={formData.smsBody || ''}
+                                        onChange={(value) => handleChange('smsBody', value)}
+                                        placeholder='Alert: {{input.message}}'
+                                        multiline
+                                        rows={2}
+                                        nodes={nodes}
+                                        edges={edges}
+                                        nodeId={node?.id}
+                                    />
+                                </Box>
+                            )}
+                        </Box>
+
+                        {/* Webhook Channel */}
+                        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 2 }}>
+                            <FormControlLabel
+                                control={
+                                    <Checkbox
+                                        checked={formData.webhookEnabled || false}
+                                        onChange={(e) => handleChange('webhookEnabled', e.target.checked)}
+                                    />
+                                }
+                                label={
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <IconWebhook size={18} />
+                                        <Typography fontWeight={500}>Webhook</Typography>
+                                    </Box>
+                                }
+                            />
+                            {formData.webhookEnabled && (
+                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1.5, pl: 4 }}>
+                                    <FormControl fullWidth size='small'>
+                                        <InputLabel>Method</InputLabel>
+                                        <Select
+                                            value={formData.webhookMethod || 'POST'}
+                                            label='Method'
+                                            onChange={(e) => handleChange('webhookMethod', e.target.value)}
+                                        >
+                                            <MenuItem value='GET'>GET</MenuItem>
+                                            <MenuItem value='POST'>POST</MenuItem>
+                                            <MenuItem value='PUT'>PUT</MenuItem>
+                                            <MenuItem value='PATCH'>PATCH</MenuItem>
+                                        </Select>
+                                    </FormControl>
+                                    <TemporalTemplateInput
+                                        label='URL'
+                                        value={formData.webhookUrl || ''}
+                                        onChange={(value) => handleChange('webhookUrl', value)}
+                                        placeholder='https://api.example.com/webhook'
+                                        nodes={nodes}
+                                        edges={edges}
+                                        nodeId={node?.id}
+                                    />
+                                    <TemporalTemplateInput
+                                        label='Headers (JSON)'
+                                        value={
+                                            typeof formData.webhookHeaders === 'object'
+                                                ? JSON.stringify(formData.webhookHeaders, null, 2)
+                                                : formData.webhookHeaders || ''
+                                        }
+                                        onChange={(value) => {
+                                            try {
+                                                handleChange('webhookHeaders', JSON.parse(value))
+                                            } catch {
+                                                handleChange('webhookHeaders', value)
+                                            }
+                                        }}
+                                        placeholder='{"Authorization": "Bearer token"}'
+                                        multiline
+                                        rows={2}
+                                        nodes={nodes}
+                                        edges={edges}
+                                        nodeId={node?.id}
+                                    />
+                                    <TemporalTemplateInput
+                                        label='Body (JSON)'
+                                        value={formData.webhookBody || ''}
+                                        onChange={(value) => handleChange('webhookBody', value)}
+                                        placeholder='{"alert": "{{input.alertType}}", "severity": "{{severity}}"}'
+                                        multiline
+                                        rows={3}
+                                        nodes={nodes}
+                                        edges={edges}
+                                        nodeId={node?.id}
+                                    />
+                                </Box>
+                            )}
+                        </Box>
+
+                        {!formData.emailEnabled && !formData.smsEnabled && !formData.webhookEnabled && (
+                            <Alert severity='warning'>Enable at least one notification channel.</Alert>
+                        )}
+                    </Box>
+                )
+
+            case 'temporalParallel':
+                return (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <TextField
+                            label='Label'
+                            fullWidth
+                            value={formData.label || ''}
+                            onChange={(e) => handleChange('label', e.target.value)}
+                        />
+                        <Box>
+                            <Typography variant='body2' sx={{ mb: 1, fontWeight: 500 }}>
+                                Mode
+                            </Typography>
+                            <ToggleButtonGroup
+                                value={formData.mode || 'fork'}
+                                exclusive
+                                onChange={(_, value) => {
+                                    if (value) handleChange('mode', value)
+                                }}
+                                size='small'
+                            >
+                                <ToggleButton value='fork' sx={{ textTransform: 'none' }}>
+                                    <IconGitFork size={16} style={{ marginRight: 6 }} />
+                                    Fork (Split)
+                                </ToggleButton>
+                                <ToggleButton value='join' sx={{ textTransform: 'none' }}>
+                                    <IconGitMerge size={16} style={{ marginRight: 6 }} />
+                                    Join (Merge)
+                                </ToggleButton>
+                            </ToggleButtonGroup>
+                        </Box>
+                        <TextField
+                            label='Branch Count'
+                            fullWidth
+                            type='number'
+                            value={formData.branchCount || 2}
+                            onChange={(e) => handleChange('branchCount', Math.max(2, parseInt(e.target.value, 10) || 2))}
+                            inputProps={{ min: 2, max: 10 }}
+                            helperText='Number of parallel branches (2-10)'
+                        />
+                        <Alert severity='info' icon={formData.mode === 'fork' ? <IconGitFork size={20} /> : <IconGitMerge size={20} />}>
+                            {formData.mode === 'fork' ? (
+                                <>
+                                    <strong>Fork</strong> splits execution into {formData.branchCount || 2} parallel branches. Connect each
+                                    output handle to a different path.
+                                </>
+                            ) : (
+                                <>
+                                    <strong>Join</strong> waits for {formData.branchCount || 2} parallel branches to complete before
+                                    continuing. Connect each input handle from a different parallel path.
+                                </>
+                            )}
+                        </Alert>
+                    </Box>
+                )
+
+            case 'temporalSubWorkflow': {
+                // Get list of available workflows (excluding current one)
+                const availableWorkflows = agentFlows.filter((f) => f.type === 'TEMPORAL' && f.id !== dialogProps?.currentWorkflowId)
+                return (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <TextField
+                            label='Label'
+                            fullWidth
+                            value={formData.label || ''}
+                            onChange={(e) => handleChange('label', e.target.value)}
+                        />
+                        <FormControl fullWidth>
+                            <InputLabel>Workflow</InputLabel>
+                            <Select
+                                value={formData.workflowId || ''}
+                                label='Workflow'
+                                onChange={(e) => {
+                                    const selectedWorkflow = availableWorkflows.find((f) => f.id === e.target.value)
+                                    handleChange('workflowId', e.target.value)
+                                    handleChange('workflowName', selectedWorkflow?.name || '')
+                                }}
+                            >
+                                {availableWorkflows.length === 0 ? (
+                                    <MenuItem disabled>
+                                        <em>No other workflows available</em>
+                                    </MenuItem>
+                                ) : (
+                                    availableWorkflows.map((flow) => (
+                                        <MenuItem key={flow.id} value={flow.id}>
+                                            {flow.name}
+                                        </MenuItem>
+                                    ))
+                                )}
+                            </Select>
+                        </FormControl>
+                        <TemporalTemplateInput
+                            label='Input (JSON)'
+                            value={formData.input || '{}'}
+                            onChange={(value) => handleChange('input', value)}
+                            placeholder='{"param1": "{{value}}", "param2": "static"}'
+                            helperText='JSON object passed as input to the child workflow'
+                            multiline
+                            rows={3}
+                            nodes={nodes}
+                            edges={edges}
+                            nodeId={node?.id}
+                        />
+                        <FormControlLabel
+                            control={
+                                <Checkbox
+                                    checked={formData.waitForCompletion !== false}
+                                    onChange={(e) => handleChange('waitForCompletion', e.target.checked)}
+                                />
+                            }
+                            label='Wait for completion'
+                        />
+                        <Typography variant='caption' color='text.secondary' sx={{ mt: -1.5, ml: 4 }}>
+                            {formData.waitForCompletion !== false
+                                ? 'Parent workflow will wait for child to complete and receive its result'
+                                : 'Fire and forget - parent continues immediately'}
+                        </Typography>
+                        {formData.waitForCompletion !== false && (
+                            <TextField
+                                label='Timeout (optional)'
+                                fullWidth
+                                value={formData.timeout || ''}
+                                onChange={(e) => handleChange('timeout', e.target.value)}
+                                placeholder='e.g., 30m, 1h, 24h'
+                                helperText='Maximum time to wait for child workflow completion'
+                            />
+                        )}
+                    </Box>
+                )
+            }
 
             default:
                 return <Typography color='text.secondary'>No configuration available for this node type.</Typography>

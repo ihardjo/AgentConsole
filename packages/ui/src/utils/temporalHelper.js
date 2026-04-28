@@ -71,6 +71,12 @@ export const getNodeDisplayLabel = (node) => {
             return 'Condition'
         case 'temporalHTTPRequest':
             return 'HTTPRequest'
+        case 'temporalNotification':
+            return 'Notification'
+        case 'temporalParallel':
+            return 'Parallel'
+        case 'temporalSubWorkflow':
+            return 'SubWorkflow'
         default:
             return node.type || 'Node'
     }

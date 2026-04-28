@@ -42,6 +42,35 @@ export const TEMPORAL_NODE_OUTPUTS = {
     temporalCondition: [
         { name: 'result', type: 'boolean', description: 'Condition result' },
         { name: 'branch', type: 'string', description: 'Branch taken (true/false)' }
+    ],
+
+    temporalLoop: [
+        { name: 'iteration', type: 'number', description: 'Current iteration count (1-based)' },
+        { name: 'loopedTo', type: 'string', description: 'Target node ID that was looped to' },
+        { name: 'continueLoop', type: 'boolean', description: 'Whether the loop continued' },
+        { name: 'exitReason', type: 'string', description: 'Why loop exited (null or max_iterations)' }
+    ],
+
+    temporalNotification: [
+        { name: 'sent', type: 'boolean', description: 'Whether notification was sent successfully' },
+        { name: 'channels', type: 'array', description: 'Channels used (email, sms, webhook)' },
+        { name: 'results', type: 'object', description: 'Per-channel send results' },
+        { name: 'sentAt', type: 'string', description: 'Notification sent timestamp' }
+    ],
+
+    temporalParallel: [
+        { name: 'mode', type: 'string', description: 'Fork or join mode' },
+        { name: 'branchCount', type: 'number', description: 'Number of parallel branches' },
+        { name: 'results', type: 'array', description: 'Results from all branches (join only)' },
+        { name: 'completedAt', type: 'string', description: 'Completion timestamp' }
+    ],
+
+    temporalSubWorkflow: [
+        { name: 'workflowId', type: 'string', description: 'Child workflow ID' },
+        { name: 'runId', type: 'string', description: 'Child workflow run ID' },
+        { name: 'result', type: 'object', description: 'Child workflow result (if waited)' },
+        { name: 'status', type: 'string', description: 'Child workflow status' },
+        { name: 'completedAt', type: 'string', description: 'Completion timestamp' }
     ]
 }
 
